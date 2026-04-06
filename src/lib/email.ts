@@ -1,6 +1,5 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL || "noreply@amaruzen.com";
 
 export async function sendCambioAprobado({
@@ -12,6 +11,8 @@ export async function sendCambioAprobado({
   claseDestino: string;
   fechaDestino: Date;
 }) {
+  if (!process.env.RESEND_API_KEY) return;
+  const resend = new Resend(process.env.RESEND_API_KEY);
   const fecha = fechaDestino.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
   await resend.emails.send({
     from: FROM,
@@ -35,6 +36,8 @@ export async function sendCambioCancelado({
   claseOrigen: string;
   claseDestino: string;
 }) {
+  if (!process.env.RESEND_API_KEY) return;
+  const resend = new Resend(process.env.RESEND_API_KEY);
   await resend.emails.send({
     from: FROM,
     to,
