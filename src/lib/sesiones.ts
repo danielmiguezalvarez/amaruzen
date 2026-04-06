@@ -44,9 +44,9 @@ export async function generarSesiones(mesesVista = 2) {
           },
         });
         creadas++;
-      } catch (e: any) {
+      } catch (e: unknown) {
         // Only swallow unique constraint violations (session already exists)
-        if (e?.code !== "P2002") throw e;
+        if ((e as { code?: string })?.code !== "P2002") throw e;
       }
       cursor.setDate(cursor.getDate() + 7);
     }

@@ -10,7 +10,7 @@ type Alumno = {
   activo: boolean;
   inscripciones: Inscripcion[];
 };
-type Clase = { id: string; nombre: string; profesor: { nombre: string } };
+type Clase = { id: string; nombre: string; profesor: { nombre: string }; activa: boolean };
 
 export default function AlumnosPage() {
   const [alumnos, setAlumnos] = useState<Alumno[]>([]);
@@ -29,7 +29,7 @@ export default function AlumnosPage() {
       fetch("/api/admin/clases").then((r) => r.json()),
     ]);
     setAlumnos(a);
-    setClases(c.filter((c: any) => c.activa));
+    setClases(c.filter((c: Clase) => c.activa));
     setLoading(false);
   }
 

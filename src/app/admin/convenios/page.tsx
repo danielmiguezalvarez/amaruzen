@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type Clase = { id: string; nombre: string; profesor: { nombre: string } };
+type Clase = { id: string; nombre: string; profesor: { nombre: string }; activa: boolean };
 type Convenio = {
   id: string;
   claseA: Clase;
@@ -28,7 +28,7 @@ export default function ConveniosPage() {
       fetch("/api/admin/clases").then((r) => r.json()),
     ]);
     setConvenios(cv);
-    setClases(cl.filter((c: any) => c.activa));
+    setClases(cl.filter((c: Clase) => c.activa));
     setLoading(false);
   }
 

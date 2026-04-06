@@ -50,7 +50,7 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = (user as any).role;
+        token.role = (user as { id: string; role: Role }).role;
         token.id = user.id;
       }
       // Si el role no está en el token todavía (sesión existente), lo cargamos
@@ -68,8 +68,8 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).role = token.role as Role;
-        (session.user as any).id = token.id as string;
+        (session.user as { role: Role; id: string }).role = token.role as Role;
+        (session.user as { role: Role; id: string }).id = token.id as string;
       }
       return session;
     },

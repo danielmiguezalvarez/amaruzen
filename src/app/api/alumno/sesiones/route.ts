@@ -58,7 +58,21 @@ export async function GET(req: Request) {
     include: { claseA: true, claseB: true },
   });
 
-  const sesionesConvenio: any[] = [];
+  const sesionesConvenio: {
+    id: string;
+    fecha: Date;
+    horaInicio: string;
+    horaFin: string;
+    aforo: number;
+    cancelada: boolean;
+    claseId: string;
+    createdAt: Date;
+    updatedAt: Date;
+    clase: { nombre: string; profesor: { nombre: string }; sala: { nombre: string } };
+    tipoConvenio: string;
+    convenioId: string;
+    requiereAprobacion: boolean;
+  }[] = [];
   for (const convenio of convenios) {
     const claseDestinoId = convenio.claseAId === sesionOrigen.claseId ? convenio.claseBId : convenio.claseAId;
 

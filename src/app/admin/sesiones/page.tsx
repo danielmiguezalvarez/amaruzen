@@ -74,7 +74,7 @@ export default function SesionesPage() {
         Object.keys(grupos).length === 0 ? (
           <div className="bg-white rounded-xl border border-stone-200 px-5 py-12 text-center">
             <p className="text-stone-400 text-sm mb-3">No hay sesiones generadas</p>
-            <p className="text-stone-400 text-xs">Pulsa "Generar sesiones" para crear las sesiones de los próximos 2 meses</p>
+            <p className="text-stone-400 text-xs">Pulsa &quot;Generar sesiones&quot; para crear las sesiones de los próximos 2 meses</p>
           </div>
         ) : (
           <div className="space-y-6">

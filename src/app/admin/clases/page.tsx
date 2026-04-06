@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-type Profesor = { id: string; nombre: string };
-type Sala = { id: string; nombre: string; aforo: number };
+type Profesor = { id: string; nombre: string; activo: boolean };
+type Sala = { id: string; nombre: string; aforo: number; activa: boolean };
 type Clase = {
   id: string;
   nombre: string;
@@ -44,8 +44,8 @@ export default function ClasesPage() {
       fetch("/api/admin/salas").then((r) => r.json()),
     ]);
     setClases(c);
-    setProfesores(p.filter((p: any) => p.activo));
-    setSalas(s.filter((s: any) => s.activa));
+    setProfesores(p.filter((p: Profesor) => p.activo));
+    setSalas(s.filter((s: Sala) => s.activa));
     setLoading(false);
   }
 

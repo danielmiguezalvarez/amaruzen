@@ -51,10 +51,6 @@ export default async function DashboardPage() {
     take: 5,
   });
 
-  const diasSemana: Record<string, string> = {
-    LUNES: "Lunes", MARTES: "Martes", MIERCOLES: "Miércoles",
-    JUEVES: "Jueves", VIERNES: "Viernes", SABADO: "Sábado", DOMINGO: "Domingo",
-  };
 
   return (
     <div className="space-y-6">
