@@ -83,10 +83,8 @@ export default function SesionesPage() {
   const porDia: Record<string, Sesion[]> = {};
   diasSemana.forEach((d) => { porDia[toLocalYMD(d)] = []; });
   sesiones.forEach((s) => {
-    const key = s.fecha.slice(0, 10); // ISO string, first 10 chars = YYYY-MM-DD
-    // But the date from Supabase may be UTC-shifted; use the date field directly
-    const fechaLocal = new Date(s.fecha);
-    const localKey = toLocalYMD(fechaLocal);
+    // Use local date to handle potential UTC shift from Supabase
+    const localKey = toLocalYMD(new Date(s.fecha));
     if (porDia[localKey] !== undefined) {
       porDia[localKey].push(s);
     }
