@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
 
-  const { nombre, tipoNombre, tipoClaseId, profesorId, salaId, aforo, recurrente, diaSemana, horaInicio, horaFin } = await req.json();
+  const { nombre, tipoNombre, tipoClaseId, profesorId, salaId, aforo, recurrente, diaSemana, horaInicio, horaFin, fechaFin } = await req.json();
 
   if (!nombre || !profesorId || !salaId || !aforo || !horaInicio || !horaFin) {
     return NextResponse.json({ error: "Faltan campos obligatorios" }, { status: 400 });
@@ -43,6 +43,7 @@ export async function POST(req: Request) {
       diaSemana: recurrente ? diaSemana : null,
       horaInicio,
       horaFin,
+      fechaFin: fechaFin ? new Date(fechaFin) : null,
     },
     include: { profesor: true, sala: true, tipoClase: true },
   });

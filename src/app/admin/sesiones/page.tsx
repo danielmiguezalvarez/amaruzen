@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 type Sesion = {
   id: string;
@@ -14,91 +14,157 @@ type Sesion = {
     profesor: { nombre: string };
     sala: { nombre: string };
   };
-  _count?: { cambiosComoDestino: number };
 };
 
+const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+
+function toLocalYMD(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function getLunesLocal(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const dia = d.getDay();
+  const diff = dia === 0 ? -6 : 1 - dia;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
 export default function SesionesPage() {
+  const [lunes, setLunes] = useState<Date>(() => getLunesLocal(new Date()));
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generando, setGenerando] = useState(false);
-  const [mensaje, setMensaje] = useState("");
 
-  async function cargar() {
-    // Cargar sesiones de los próximos 30 días
-    const res = await fetch("/api/admin/sesiones/lista");
+  const cargar = useCallback(async (lunesDate: Date) => {
+    setLoading(true);
+    const res = await fetch(`/api/admin/sesiones/semana?fecha=${toLocalYMD(lunesDate)}`);
     if (res.ok) {
       const data = await res.json();
-      setSesiones(data);
+      setSesiones(data.sesiones);
     }
     setLoading(false);
+  }, []);
+
+  useEffect(() => { cargar(lunes); }, [lunes, cargar]);
+
+  function semanaAnterior() {
+    setLunes((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() - 7);
+      return d;
+    });
   }
 
-  useEffect(() => { cargar(); }, []);
-
-  async function generar() {
-    setGenerando(true);
-    setMensaje("");
-    const res = await fetch("/api/admin/sesiones", { method: "POST" });
-    const data = await res.json();
-    setMensaje(`Se generaron ${data.creadas} nuevas sesiones.`);
-    setGenerando(false);
-    cargar();
+  function semanasiguiente() {
+    setLunes((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + 7);
+      return d;
+    });
   }
 
-  // Agrupar por fecha
-  const grupos: Record<string, Sesion[]> = {};
-  sesiones.forEach((s) => {
-    const fecha = new Date(s.fecha).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
-    if (!grupos[fecha]) grupos[fecha] = [];
-    grupos[fecha].push(s);
+  function hoyEnRango() {
+    const hoyLunes = getLunesLocal(new Date());
+    return hoyLunes.getTime() === lunes.getTime();
+  }
+
+  // Construir array de 7 fechas (lunes → domingo)
+  const diasSemana: Date[] = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(lunes);
+    d.setDate(d.getDate() + i);
+    return d;
   });
 
+  // Indexar sesiones por fecha (YYYY-MM-DD local)
+  const porDia: Record<string, Sesion[]> = {};
+  diasSemana.forEach((d) => { porDia[toLocalYMD(d)] = []; });
+  sesiones.forEach((s) => {
+    const key = s.fecha.slice(0, 10); // ISO string, first 10 chars = YYYY-MM-DD
+    // But the date from Supabase may be UTC-shifted; use the date field directly
+    const fechaLocal = new Date(s.fecha);
+    const localKey = toLocalYMD(fechaLocal);
+    if (porDia[localKey] !== undefined) {
+      porDia[localKey].push(s);
+    }
+  });
+
+  const domingo = diasSemana[6];
+  const labelSemana = `${lunes.getDate()} ${lunes.toLocaleString("es-ES", { month: "short" })} – ${domingo.getDate()} ${domingo.toLocaleString("es-ES", { month: "short", year: "numeric" })}`;
+
+  const hoy = toLocalYMD(new Date());
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-stone-800">Sesiones</h1>
-          <p className="text-stone-500 text-sm mt-1">Próximas 4 semanas</p>
+          <p className="text-stone-500 text-sm mt-1">Vista semanal · Las sesiones se generan automáticamente</p>
         </div>
-        <button onClick={generar} disabled={generando}
-          className="px-4 py-2 bg-stone-800 text-white rounded-lg text-sm font-medium hover:bg-stone-700 disabled:opacity-50 transition-colors">
-          {generando ? "Generando..." : "Generar sesiones (2 meses)"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={semanaAnterior}
+            className="p-2 rounded-lg border border-stone-200 hover:bg-stone-50 transition-colors text-stone-600">
+            ‹
+          </button>
+          <span className="text-sm font-medium text-stone-700 min-w-[180px] text-center">{labelSemana}</span>
+          <button onClick={semanasiguiente}
+            className="p-2 rounded-lg border border-stone-200 hover:bg-stone-50 transition-colors text-stone-600">
+            ›
+          </button>
+          {!hoyEnRango() && (
+            <button onClick={() => setLunes(getLunesLocal(new Date()))}
+              className="px-3 py-1.5 text-sm border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors text-stone-600">
+              Hoy
+            </button>
+          )}
+        </div>
       </div>
 
-      {mensaje && (
-        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{mensaje}</div>
-      )}
+      {loading ? (
+        <div className="text-center py-16 text-stone-400 text-sm">Cargando sesiones...</div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
+          {diasSemana.map((dia, i) => {
+            const key = toLocalYMD(dia);
+            const esHoy = key === hoy;
+            const sesionesDia = porDia[key] ?? [];
 
-      {loading ? <p className="text-stone-400 text-sm">Cargando...</p> : (
-        Object.keys(grupos).length === 0 ? (
-          <div className="bg-white rounded-xl border border-stone-200 px-5 py-12 text-center">
-            <p className="text-stone-400 text-sm mb-3">No hay sesiones generadas</p>
-            <p className="text-stone-400 text-xs">Pulsa &quot;Generar sesiones&quot; para crear las sesiones de los próximos 2 meses</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {Object.entries(grupos).map(([fecha, sesionesDia]) => (
-              <div key={fecha}>
-                <h2 className="text-sm font-semibold text-stone-500 uppercase tracking-wide mb-2 capitalize">{fecha}</h2>
-                <div className="bg-white rounded-xl border border-stone-200 divide-y divide-stone-100 overflow-hidden">
-                  {sesionesDia.map((s) => (
-                    <div key={s.id} className="px-5 py-3 flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-stone-800 text-sm">{s.clase.nombre}</p>
-                        <p className="text-xs text-stone-500">{s.clase.profesor.nombre} · {s.clase.sala.nombre}</p>
+            return (
+              <div key={key} className={`rounded-xl border overflow-hidden ${esHoy ? "border-stone-500" : "border-stone-200"}`}>
+                {/* Cabecera día */}
+                <div className={`px-3 py-2 text-center ${esHoy ? "bg-stone-800 text-white" : "bg-stone-50 text-stone-600"}`}>
+                  <p className="text-xs font-semibold uppercase tracking-wide">{DIAS[i]}</p>
+                  <p className={`text-lg font-bold leading-tight ${esHoy ? "text-white" : "text-stone-800"}`}>
+                    {dia.getDate()}
+                  </p>
+                </div>
+
+                {/* Sesiones del día */}
+                <div className="bg-white divide-y divide-stone-100 min-h-[80px]">
+                  {sesionesDia.length === 0 ? (
+                    <p className="px-3 py-4 text-xs text-stone-300 text-center">Sin sesiones</p>
+                  ) : (
+                    sesionesDia.map((s) => (
+                      <div key={s.id} className={`px-3 py-2 ${s.cancelada ? "opacity-40" : ""}`}>
+                        <p className="text-xs font-semibold text-stone-800 leading-tight">{s.clase.nombre}</p>
+                        <p className="text-xs text-stone-500 mt-0.5">{s.horaInicio} - {s.horaFin}</p>
+                        <p className="text-xs text-stone-400">{s.clase.profesor.nombre}</p>
+                        <p className="text-xs text-stone-400">{s.clase.sala.nombre}</p>
+                        {s.cancelada && (
+                          <span className="inline-block mt-1 px-1.5 py-0.5 bg-red-100 text-red-600 text-xs rounded">Cancelada</span>
+                        )}
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm text-stone-700">{s.horaInicio} - {s.horaFin}</p>
-                        <p className="text-xs text-stone-400">Aforo: {s.aforo}</p>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-        )
+            );
+          })}
+        </div>
       )}
     </div>
   );

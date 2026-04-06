@@ -1,9 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
-type Sesion = { id: string; fecha: Date; horaInicio: string; horaFin: string };
+type Sesion = {
+  id: string;
+  fecha: string;
+  horaInicio: string;
+  horaFin: string;
+  aforo: number;
+  cancelada: boolean;
+  clase: {
+    id: string;
+    nombre: string;
+    profesor: { nombre: string };
+    sala: { nombre: string };
+  };
+};
+
 type SesionDisponible = {
   id: string;
   fecha: Date | string;
@@ -15,40 +29,64 @@ type SesionDisponible = {
   requiereAprobacion?: boolean;
 };
 
-type Inscripcion = {
-  id: string;
-  clase: {
-    id: string;
-    nombre: string;
-    profesor: { nombre: string };
-    sala: { nombre: string };
-    diaSemana: string | null;
-    horaInicio: string;
-    horaFin: string;
-    recurrente: boolean;
-  };
-  sesiones: Sesion[];
-};
+const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
-const DIAS_ES: Record<string, string> = {
-  LUNES: "Lunes", MARTES: "Martes", MIERCOLES: "Miércoles",
-  JUEVES: "Jueves", VIERNES: "Viernes", SABADO: "Sábado", DOMINGO: "Domingo",
-};
+function toLocalYMD(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
-export default function ClasesClient({ inscripciones }: { inscripciones: Inscripcion[] }) {
+function getLunesLocal(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const dia = d.getDay();
+  const diff = dia === 0 ? -6 : 1 - dia;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+export default function ClasesClient() {
   const router = useRouter();
+  const [lunes, setLunes] = useState<Date>(() => getLunesLocal(new Date()));
+  const [sesiones, setSesiones] = useState<Sesion[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Swap modal state
   const [sesionSeleccionada, setSesionSeleccionada] = useState<Sesion | null>(null);
   const [opciones, setOpciones] = useState<{ mismaClase: SesionDisponible[]; convenio: SesionDisponible[] } | null>(null);
   const [loadingOpciones, setLoadingOpciones] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [exito, setExito] = useState("");
 
+  const cargar = useCallback(async (lunesDate: Date) => {
+    setLoading(true);
+    const res = await fetch(`/api/alumno/sesiones/semana?fecha=${toLocalYMD(lunesDate)}`);
+    if (res.ok) {
+      const data = await res.json();
+      setSesiones(data.sesiones);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { cargar(lunes); }, [lunes, cargar]);
+
+  function semanaAnterior() {
+    setLunes((prev) => { const d = new Date(prev); d.setDate(d.getDate() - 7); return d; });
+  }
+  function semanaSiguiente() {
+    setLunes((prev) => { const d = new Date(prev); d.setDate(d.getDate() + 7); return d; });
+  }
+  function hoyEnRango() {
+    return getLunesLocal(new Date()).getTime() === lunes.getTime();
+  }
+
   async function abrirCambio(sesion: Sesion) {
     setSesionSeleccionada(sesion);
     setOpciones(null);
     setExito("");
     setLoadingOpciones(true);
-
     const res = await fetch(`/api/alumno/sesiones?sesionOrigenId=${sesion.id}`);
     const data = await res.json();
     setOpciones(data);
@@ -58,7 +96,6 @@ export default function ClasesClient({ inscripciones }: { inscripciones: Inscrip
   async function solicitarCambio(destino: SesionDisponible) {
     if (!sesionSeleccionada) return;
     setEnviando(true);
-
     const res = await fetch("/api/alumno/cambios", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -68,7 +105,6 @@ export default function ClasesClient({ inscripciones }: { inscripciones: Inscrip
         convenioId: destino.convenioId || null,
       }),
     });
-
     if (res.ok) {
       const cambio = await res.json();
       const msg = cambio.estado === "APROBADO"
@@ -78,68 +114,109 @@ export default function ClasesClient({ inscripciones }: { inscripciones: Inscrip
       setSesionSeleccionada(null);
       setOpciones(null);
       router.refresh();
+      cargar(lunes);
     }
     setEnviando(false);
   }
 
+  const diasSemana: Date[] = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(lunes);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+
+  const porDia: Record<string, Sesion[]> = {};
+  diasSemana.forEach((d) => { porDia[toLocalYMD(d)] = []; });
+  sesiones.forEach((s) => {
+    const localKey = toLocalYMD(new Date(s.fecha));
+    if (porDia[localKey] !== undefined) porDia[localKey].push(s);
+  });
+
+  const domingo = diasSemana[6];
+  const labelSemana = `${lunes.getDate()} ${lunes.toLocaleString("es-ES", { month: "short" })} – ${domingo.getDate()} ${domingo.toLocaleString("es-ES", { month: "short", year: "numeric" })}`;
+  const hoy = toLocalYMD(new Date());
+  const ahora = new Date();
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-stone-800">Mis clases</h1>
-        <p className="text-stone-500 text-sm mt-1">Clases a las que estás inscrito</p>
+        <p className="text-stone-500 text-sm mt-1">Vista semanal de tus sesiones</p>
       </div>
 
       {exito && (
         <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">{exito}</div>
       )}
 
-      {inscripciones.length === 0 ? (
-        <div className="bg-white rounded-xl border border-stone-200 px-5 py-12 text-center text-stone-400 text-sm">
-          No estás inscrito a ninguna clase todavía. Contacta con el centro para inscribirte.
-        </div>
+      {/* Navegación semana */}
+      <div className="flex items-center gap-2">
+        <button onClick={semanaAnterior}
+          className="p-2 rounded-lg border border-stone-200 hover:bg-stone-50 transition-colors text-stone-600">
+          ‹
+        </button>
+        <span className="text-sm font-medium text-stone-700 min-w-[180px] text-center">{labelSemana}</span>
+        <button onClick={semanaSiguiente}
+          className="p-2 rounded-lg border border-stone-200 hover:bg-stone-50 transition-colors text-stone-600">
+          ›
+        </button>
+        {!hoyEnRango() && (
+          <button onClick={() => setLunes(getLunesLocal(new Date()))}
+            className="px-3 py-1.5 text-sm border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors text-stone-600">
+            Hoy
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="text-center py-16 text-stone-400 text-sm">Cargando sesiones...</div>
       ) : (
-        <div className="space-y-4">
-          {inscripciones.map((insc) => (
-            <div key={insc.id} className="bg-white rounded-xl border border-stone-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-stone-100">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="font-semibold text-stone-800">{insc.clase.nombre}</h2>
-                    <p className="text-sm text-stone-500 mt-0.5">
-                      {insc.clase.profesor.nombre} · {insc.clase.sala.nombre}
-                    </p>
-                    {insc.clase.recurrente && insc.clase.diaSemana && (
-                      <p className="text-sm text-stone-500">
-                        {DIAS_ES[insc.clase.diaSemana]} · {insc.clase.horaInicio} - {insc.clase.horaFin}
-                      </p>
-                    )}
-                  </div>
-                  <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">Inscrito</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
+          {diasSemana.map((dia, i) => {
+            const key = toLocalYMD(dia);
+            const esHoy = key === hoy;
+            const sesionesDia = porDia[key] ?? [];
+
+            return (
+              <div key={key} className={`rounded-xl border overflow-hidden ${esHoy ? "border-stone-500" : "border-stone-200"}`}>
+                <div className={`px-3 py-2 text-center ${esHoy ? "bg-stone-800 text-white" : "bg-stone-50 text-stone-600"}`}>
+                  <p className="text-xs font-semibold uppercase tracking-wide">{DIAS[i]}</p>
+                  <p className={`text-lg font-bold leading-tight ${esHoy ? "text-white" : "text-stone-800"}`}>
+                    {dia.getDate()}
+                  </p>
+                </div>
+                <div className="bg-white divide-y divide-stone-100 min-h-[80px]">
+                  {sesionesDia.length === 0 ? (
+                    <p className="px-3 py-4 text-xs text-stone-300 text-center">Sin sesiones</p>
+                  ) : (
+                    sesionesDia.map((s) => {
+                      const fechaSesion = new Date(s.fecha);
+                      const [h, m] = s.horaInicio.split(":").map(Number);
+                      fechaSesion.setHours(h, m, 0, 0);
+                      const yaEmpezó = fechaSesion <= ahora;
+
+                      return (
+                        <div key={s.id} className={`px-3 py-2 ${s.cancelada ? "opacity-40" : ""}`}>
+                          <p className="text-xs font-semibold text-stone-800 leading-tight">{s.clase.nombre}</p>
+                          <p className="text-xs text-stone-500 mt-0.5">{s.horaInicio} - {s.horaFin}</p>
+                          <p className="text-xs text-stone-400">{s.clase.sala.nombre}</p>
+                          {s.cancelada ? (
+                            <span className="inline-block mt-1.5 px-1.5 py-0.5 bg-red-100 text-red-600 text-xs rounded">Cancelada</span>
+                          ) : !yaEmpezó ? (
+                            <button
+                              onClick={() => abrirCambio(s)}
+                              className="mt-1.5 w-full text-xs text-stone-600 border border-stone-300 px-2 py-1 rounded hover:bg-stone-50 transition-colors"
+                            >
+                              No puedo ir
+                            </button>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
-
-              {insc.sesiones.length > 0 && (
-                <div className="divide-y divide-stone-100">
-                  {insc.sesiones.map((sesion) => (
-                    <div key={sesion.id} className="px-5 py-3 flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-stone-700">
-                          {new Date(sesion.fecha).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
-                        </p>
-                        <p className="text-xs text-stone-400">{sesion.horaInicio} - {sesion.horaFin}</p>
-                      </div>
-                      <button
-                        onClick={() => abrirCambio(sesion)}
-                        className="text-sm text-stone-600 border border-stone-300 px-3 py-1 rounded-lg hover:bg-stone-50 transition-colors"
-                      >
-                        No puedo ir
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -154,7 +231,8 @@ export default function ClasesClient({ inscripciones }: { inscripciones: Inscrip
             </div>
 
             <div className="bg-stone-50 rounded-lg p-3 mb-5 text-sm text-stone-600">
-              Clase del <strong>{new Date(sesionSeleccionada.fecha).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}</strong> a las <strong>{sesionSeleccionada.horaInicio}</strong>
+              <strong>{sesionSeleccionada.clase.nombre}</strong> —{" "}
+              {new Date(sesionSeleccionada.fecha).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })} a las <strong>{sesionSeleccionada.horaInicio}</strong>
             </div>
 
             {loadingOpciones ? (

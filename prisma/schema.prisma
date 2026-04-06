@@ -143,6 +143,7 @@ model Clase {
   diaSemana   DiaSemana? // solo si recurrente = true
   horaInicio  String     // formato "HH:mm"
   horaFin     String     // formato "HH:mm"
+  fechaFin    DateTime?  // null = indefinida; si se pone, la clase termina ese día
   activa      Boolean    @default(true)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt

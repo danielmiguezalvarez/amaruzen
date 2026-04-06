@@ -14,6 +14,7 @@ type Clase = {
   diaSemana: string | null;
   horaInicio: string;
   horaFin: string;
+  fechaFin: string | null;
   activa: boolean;
 };
 
@@ -33,6 +34,7 @@ export default function ClasesPage() {
   const [form, setForm] = useState({
     nombre: "", tipoNombre: "", profesorId: "", salaId: "", aforo: "",
     recurrente: true, diaSemana: "LUNES", horaInicio: "09:00", horaFin: "10:00",
+    fechaFin: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -53,7 +55,7 @@ export default function ClasesPage() {
 
   function abrirNuevo() {
     setEditando(null);
-    setForm({ nombre: "", tipoNombre: "", profesorId: "", salaId: "", aforo: "", recurrente: true, diaSemana: "LUNES", horaInicio: "09:00", horaFin: "10:00" });
+    setForm({ nombre: "", tipoNombre: "", profesorId: "", salaId: "", aforo: "", recurrente: true, diaSemana: "LUNES", horaInicio: "09:00", horaFin: "10:00", fechaFin: "" });
     setError("");
     setShowForm(true);
   }
@@ -64,6 +66,7 @@ export default function ClasesPage() {
       nombre: c.nombre, tipoNombre: "", profesorId: c.profesor.id, salaId: c.sala.id,
       aforo: String(c.aforo), recurrente: c.recurrente,
       diaSemana: c.diaSemana || "LUNES", horaInicio: c.horaInicio, horaFin: c.horaFin,
+      fechaFin: c.fechaFin ? new Date(c.fechaFin).toISOString().split("T")[0] : "",
     });
     setError("");
     setShowForm(true);
@@ -210,13 +213,22 @@ export default function ClasesPage() {
                 <label htmlFor="recurrente" className="text-sm font-medium text-stone-700">Clase recurrente (semanal)</label>
               </div>
               {form.recurrente && (
-                <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">Día de la semana</label>
-                  <select value={form.diaSemana} onChange={(e) => setForm({ ...form, diaSemana: e.target.value })}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-400">
-                    {DIAS.map((d) => <option key={d} value={d}>{DIAS_ES[d]}</option>)}
-                  </select>
-                </div>
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Día de la semana</label>
+                    <select value={form.diaSemana} onChange={(e) => setForm({ ...form, diaSemana: e.target.value })}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-400">
+                      {DIAS.map((d) => <option key={d} value={d}>{DIAS_ES[d]}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">
+                      Fecha de fin <span className="text-stone-400 font-normal">(opcional — vacío = indefinida)</span>
+                    </label>
+                    <input type="date" value={form.fechaFin} onChange={(e) => setForm({ ...form, fechaFin: e.target.value })}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-400" />
+                  </div>
+                </>
               )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
