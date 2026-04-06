@@ -1,0 +1,227 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────
+// NextAuth required models
+// ─────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─────────────────────────────────────────────
+// Core models
+// ─────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  ALUMNO
+}
+
+enum DiaSemana {
+  LUNES
+  MARTES
+  MIERCOLES
+  JUEVES
+  VIERNES
+  SABADO
+  DOMINGO
+}
+
+enum TipoConvenio {
+  EQUIVALENTE
+  EXCEPCIONAL
+}
+
+enum EstadoCambio {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?   // null si usa OAuth
+  role          Role      @default(ALUMNO)
+  activo        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  inscripciones Inscripcion[]
+  cambios       Cambio[]
+}
+
+model Sala {
+  id          String   @id @default(cuid())
+  nombre      String
+  descripcion String?
+  aforo       Int
+  activa      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clases      Clase[]
+}
+
+model Profesor {
+  id        String   @id @default(cuid())
+  nombre    String
+  email     String?  @unique
+  telefono  String?
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clases    Clase[]
+}
+
+model TipoClase {
+  id          String   @id @default(cuid())
+  nombre      String
+  descripcion String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clases      Clase[]
+}
+
+model Clase {
+  id          String     @id @default(cuid())
+  nombre      String
+  tipoClaseId String
+  profesorId  String
+  salaId      String
+  aforo       Int        // puede sobreescribir el aforo de la sala
+  recurrente  Boolean    @default(true)
+  diaSemana   DiaSemana? // solo si recurrente = true
+  horaInicio  String     // formato "HH:mm"
+  horaFin     String     // formato "HH:mm"
+  activa      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  tipoClase   TipoClase  @relation(fields: [tipoClaseId], references: [id])
+  profesor    Profesor   @relation(fields: [profesorId], references: [id])
+  sala        Sala       @relation(fields: [salaId], references: [id])
+
+  inscripciones        Inscripcion[]
+  sesiones             Sesion[]
+  conveniosComoClaseA  Convenio[]   @relation("ConvenioClaseA")
+  conveniosComoClaseB  Convenio[]   @relation("ConvenioClaseB")
+}
+
+model Sesion {
+  id         String   @id @default(cuid())
+  claseId    String
+  fecha      DateTime // fecha concreta de la sesión
+  horaInicio String   // permite sobrescribir si hay excepción
+  horaFin    String
+  aforo      Int      // copia del aforo en el momento de creación
+  cancelada  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  clase      Clase    @relation(fields: [claseId], references: [id])
+
+  cambiosComoOrigen  Cambio[] @relation("CambioOrigen")
+  cambiosComoDestino Cambio[] @relation("CambioDestino")
+
+  @@unique([claseId, fecha])
+}
+
+model Inscripcion {
+  id        String   @id @default(cuid())
+  userId    String
+  claseId   String
+  activa    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clase     Clase    @relation(fields: [claseId], references: [id])
+
+  @@unique([userId, claseId])
+}
+
+model Convenio {
+  id                 String       @id @default(cuid())
+  claseAId           String
+  claseBId           String
+  tipo               TipoConvenio
+  limiteMensual      Int          // número de cambios permitidos por mes
+  requiereAprobacion Boolean      @default(false) // aplica solo a EXCEPCIONAL
+  activo             Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  claseA             Clase        @relation("ConvenioClaseA", fields: [claseAId], references: [id])
+  claseB             Clase        @relation("ConvenioClaseB", fields: [claseBId], references: [id])
+
+  cambios            Cambio[]
+
+  @@unique([claseAId, claseBId])
+}
+
+model Cambio {
+  id              String       @id @default(cuid())
+  userId          String
+  sesionOrigenId  String
+  sesionDestinoId String
+  convenioId      String?      // null si es cambio a la misma clase otro horario
+  estado          EstadoCambio @default(PENDIENTE)
+  nota            String?      // mensaje opcional del alumno
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sesionOrigen    Sesion       @relation("CambioOrigen", fields: [sesionOrigenId], references: [id])
+  sesionDestino   Sesion       @relation("CambioDestino", fields: [sesionDestinoId], references: [id])
+  convenio        Convenio?    @relation(fields: [convenioId], references: [id])
+}
