@@ -84,7 +84,7 @@ If you add a test runner in the future, define:
 
 - Central concept: weekly calendar by day + room lanes.
 - Calendar data is **virtual-first**:
-  - recurring class definitions in `Clase`
+  - base schedules in `Horario` (recurrentes o puntuales por `fecha`)
   - per-session exceptions in `SesionExcepcion`
   - approved room bookings in `Reserva`
 - Session records in `Sesion` are **materialized lazily** when required (e.g. swap operations).
@@ -92,13 +92,14 @@ If you add a test runner in the future, define:
 ### Key functions
 
 - `calcularSesionesSemana(lunes)` in `src/lib/sesiones.ts`
-- `materializarSesion(claseId, fecha)` in `src/lib/sesiones.ts`
-- `calcularOcupacionSesion(claseId, fecha, aforo)` in `src/lib/sesiones.ts`
+- `materializarSesion(horarioId, fecha)` in `src/lib/sesiones.ts`
+- `calcularOcupacionSesion(horarioId, fecha, aforo)` in `src/lib/sesiones.ts`
+- `calcularOcupacionesSemanaBatch(sesiones)` in `src/lib/sesiones.ts`
 
 ### Occupancy rule
 
 - Occupied seats are computed as:
-  - active enrollments (`Inscripcion`) + pending/approved incoming swaps - pending/approved outgoing swaps
+  - active enrollments (`InscripcionHorario`) - absences (`Ausencia`) + pending/approved incoming swaps - pending/approved outgoing swaps
 
 ## API Conventions
 
@@ -128,8 +129,9 @@ If you add a test runner in the future, define:
 - Time values are stored as `String` (`HH:mm`) for class/session ranges.
 - Normalize date-only semantics to midnight when matching by day.
 - Preserve unique constraints behavior:
-  - `Sesion @@unique([claseId, fecha])`
-  - `SesionExcepcion @@unique([claseId, fecha])`
+  - `Sesion @@unique([horarioId, fecha])`
+  - `SesionExcepcion @@unique([horarioId, fecha])`
+  - `InscripcionHorario @@unique([inscripcionId, horarioId])`
 
 ## Coding Style
 

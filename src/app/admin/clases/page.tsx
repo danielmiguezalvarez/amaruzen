@@ -15,8 +15,11 @@ type Clase = {
   horaInicio: string;
   horaFin: string;
   fechaFin: string | null;
+  color: string | null;
   activa: boolean;
 };
+
+const PALETA = ["#ef4444", "#f59e0b", "#22c55e", "#14b8a6", "#0ea5e9", "#6366f1", "#ec4899", "#78716c"];
 
 const DIAS = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"];
 const DIAS_ES: Record<string, string> = {
@@ -34,7 +37,7 @@ export default function ClasesPage() {
   const [form, setForm] = useState({
     nombre: "", tipoNombre: "", profesorId: "", salaId: "", aforo: "",
     recurrente: true, diaSemana: "LUNES", horaInicio: "09:00", horaFin: "10:00",
-    fechaFin: "",
+    fechaFin: "", color: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -56,7 +59,7 @@ export default function ClasesPage() {
 
   function abrirNuevo() {
     setEditando(null);
-    setForm({ nombre: "", tipoNombre: "", profesorId: "", salaId: "", aforo: "", recurrente: true, diaSemana: "LUNES", horaInicio: "09:00", horaFin: "10:00", fechaFin: "" });
+    setForm({ nombre: "", tipoNombre: "", profesorId: "", salaId: "", aforo: "", recurrente: true, diaSemana: "LUNES", horaInicio: "09:00", horaFin: "10:00", fechaFin: "", color: "" });
     setError("");
     setShowForm(true);
   }
@@ -68,6 +71,7 @@ export default function ClasesPage() {
       aforo: String(c.aforo), recurrente: c.recurrente,
       diaSemana: c.diaSemana || "LUNES", horaInicio: c.horaInicio, horaFin: c.horaFin,
       fechaFin: c.fechaFin ? new Date(c.fechaFin).toISOString().split("T")[0] : "",
+      color: c.color || "",
     });
     setError("");
     setShowForm(true);
@@ -207,6 +211,28 @@ export default function ClasesPage() {
                     <option value="">Selecciona...</option>
                     {salas.map((s) => <option key={s.id} value={s.id}>{s.nombre} ({s.aforo} plazas)</option>)}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Color <span className="text-stone-400 font-normal">(opcional)</span></label>
+                  <div className="flex flex-wrap gap-2">
+                    {PALETA.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setForm({ ...form, color: c })}
+                        className={`w-6 h-6 rounded-full border ${form.color === c ? "ring-2 ring-stone-800" : "border-stone-300"}`}
+                        style={{ backgroundColor: c }}
+                        aria-label={`Color ${c}`}
+                      />
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, color: "" })}
+                      className="px-2 py-1 text-xs border border-stone-300 rounded"
+                    >
+                      Sin color
+                    </button>
+                  </div>
                 </div>
               </div>
               <div>

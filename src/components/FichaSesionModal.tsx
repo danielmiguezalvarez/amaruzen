@@ -10,6 +10,9 @@ type Props = {
   ocupados?: number;
   aforo?: number;
   alumnos?: Alumno[];
+  cargando?: boolean;
+  onMoverAlumno?: (alumnoId: string) => void;
+  onAusenciaAlumno?: (alumnoId: string) => void;
 };
 
 export default function FichaSesionModal({
@@ -20,6 +23,9 @@ export default function FichaSesionModal({
   ocupados,
   aforo,
   alumnos = [],
+  cargando = false,
+  onMoverAlumno,
+  onAusenciaAlumno,
 }: Props) {
   if (!abierto) return null;
 
@@ -53,14 +59,40 @@ export default function FichaSesionModal({
 
         <div>
           <h3 className="text-sm font-medium text-stone-700 mb-2">Alumnos inscritos</h3>
-          {alumnos.length === 0 ? (
+          {cargando ? (
+            <p className="text-sm text-stone-400">Cargando alumnos...</p>
+          ) : alumnos.length === 0 ? (
             <p className="text-sm text-stone-400">No hay alumnos listados para esta sesion.</p>
           ) : (
             <ul className="space-y-2">
               {alumnos.map((a) => (
                 <li key={a.id} className="bg-stone-50 rounded-lg px-3 py-2">
-                  <p className="text-sm font-medium text-stone-800">{a.name || "Sin nombre"}</p>
-                  <p className="text-xs text-stone-500">{a.email}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-stone-800">{a.name || "Sin nombre"}</p>
+                      <p className="text-xs text-stone-500">{a.email}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      {onMoverAlumno && (
+                        <button
+                          type="button"
+                          onClick={() => onMoverAlumno(a.id)}
+                          className="px-2 py-1 text-[11px] border border-stone-300 rounded hover:bg-white"
+                        >
+                          Mover
+                        </button>
+                      )}
+                      {onAusenciaAlumno && (
+                        <button
+                          type="button"
+                          onClick={() => onAusenciaAlumno(a.id)}
+                          className="px-2 py-1 text-[11px] border border-amber-300 text-amber-700 rounded hover:bg-amber-50"
+                        >
+                          Ausencia
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </li>
               ))}
             </ul>

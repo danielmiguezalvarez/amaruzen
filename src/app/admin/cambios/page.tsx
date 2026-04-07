@@ -22,7 +22,6 @@ export default function CambiosPage() {
   const [cambios, setCambios] = useState<Cambio[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<"TODOS" | "PENDIENTE" | "APROBADO" | "RECHAZADO">("PENDIENTE");
-  const [procesando, setProcesando] = useState<string | null>(null);
 
   async function cargar() {
     const data = await fetch("/api/admin/cambios").then((r) => r.json());
@@ -31,16 +30,6 @@ export default function CambiosPage() {
   }
 
   useEffect(() => { cargar(); }, []);
-
-  async function resolver(id: string, estado: "APROBADO" | "RECHAZADO") {
-    setProcesando(id);
-    await fetch(`/api/admin/cambios/${id}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ estado }),
-    });
-    setProcesando(null);
-    cargar();
-  }
 
   const cambiosFiltrados = filtro === "TODOS" ? cambios : cambios.filter((c) => c.estado === filtro);
 
@@ -99,21 +88,12 @@ export default function CambiosPage() {
                       Solicitado: {new Date(c.createdAt).toLocaleDateString("es-ES")}
                     </div>
                   </div>
-                  {c.estado === "PENDIENTE" && (
-                    <div className="flex gap-2 shrink-0">
-                      <button onClick={() => resolver(c.id, "APROBADO")} disabled={procesando === c.id}
-                        className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
-                        Aprobar
-                      </button>
-                      <button onClick={() => resolver(c.id, "RECHAZADO")} disabled={procesando === c.id}
-                        className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 disabled:opacity-50">
-                        Rechazar
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))
+                   <div className="text-xs text-stone-400 shrink-0">
+                     #{c.id.slice(0, 8)}
+                   </div>
+                 </div>
+               </div>
+             ))
           )}
         </div>
       )}

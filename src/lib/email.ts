@@ -106,3 +106,26 @@ export async function sendReservaRespondida({
     `,
   });
 }
+
+export async function sendNotificacionAdmin({
+  to,
+  asunto,
+  mensaje,
+}: {
+  to: string;
+  asunto: string;
+  mensaje: string;
+}) {
+  if (!process.env.RESEND_API_KEY) return;
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: asunto,
+    html: `
+      <p>Hola,</p>
+      <p>${mensaje}</p>
+      <p>Equipo Amaruzen</p>
+    `,
+  });
+}

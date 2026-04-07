@@ -12,7 +12,20 @@ export async function GET() {
     include: {
       inscripciones: {
         where: { activa: true },
-        include: { clase: { include: { profesor: true } } },
+        include: {
+          clase: { include: { profesor: true } },
+          horarios: {
+            where: { activa: true },
+            include: {
+              horario: {
+                include: {
+                  sala: true,
+                  profesor: true,
+                },
+              },
+            },
+          },
+        },
       },
     },
     orderBy: { name: "asc" },

@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { calcularOcupacionSesion, materializarSesion, normalizarFecha } from "@/lib/sesiones";
+import {
+  calcularOcupacionSesion,
+  materializarSesion,
+  normalizarFecha,
+  resolverSesionId,
+} from "@/lib/sesiones";
 import type { DiaSemana } from "@prisma/client";
 
 const DIA_A_JS: Record<DiaSemana, number> = {
@@ -15,22 +20,6 @@ const DIA_A_JS: Record<DiaSemana, number> = {
   SABADO: 6,
 };
 
-function parseSesionRef(ref: string): { claseId: string; fecha: Date } | null {
-  if (!ref.includes("__")) return null;
-  const [claseId, fechaIso] = ref.split("__");
-  if (!claseId || !fechaIso) return null;
-  const fecha = new Date(fechaIso);
-  if (Number.isNaN(fecha.getTime())) return null;
-  return { claseId, fecha: normalizarFecha(fecha) };
-}
-
-async function resolverSesionId(ref: string) {
-  const parsed = parseSesionRef(ref);
-  if (!parsed) return ref;
-  const { sesion } = await materializarSesion(parsed.claseId, parsed.fecha);
-  return sesion.id;
-}
-
 function getInicioSesion(fecha: Date, horaInicio: string) {
   const inicio = new Date(fecha);
   const [h, m] = horaInicio.split(":").map(Number);
@@ -38,13 +27,20 @@ function getInicioSesion(fecha: Date, horaInicio: string) {
   return inicio;
 }
 
-function siguientesFechasClase(
+function siguientesFechasHorario(
   diaSemana: DiaSemana | null,
+  fechaPuntual: Date | null,
   desde: Date,
   limite: number,
   fechaInicio?: Date | null,
   fechaFin?: Date | null
 ) {
+  if (fechaPuntual) {
+    const f = normalizarFecha(fechaPuntual);
+    if (f >= normalizarFecha(desde)) return [f];
+    return [];
+  }
+
   if (!diaSemana) return [];
 
   const objetivo = DIA_A_JS[diaSemana];
@@ -63,7 +59,6 @@ function siguientesFechasClase(
   return fechas;
 }
 
-// Devuelve las sesiones disponibles para cambiarse desde una sesión origen
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
@@ -73,76 +68,102 @@ export async function GET(req: Request) {
   if (!sesionOrigenId) return NextResponse.json({ error: "Falta sesionOrigenId" }, { status: 400 });
 
   const sesionOrigenRealId = await resolverSesionId(sesionOrigenId);
+  if (!sesionOrigenRealId) {
+    return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 });
+  }
 
   const sesionOrigen = await prisma.sesion.findUnique({
     where: { id: sesionOrigenRealId },
-    include: { clase: true },
+    include: {
+      clase: true,
+      horario: true,
+    },
   });
   if (!sesionOrigen) return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 });
 
   const ahora = new Date();
 
-  // 1) Misma clase, otros horarios
-  const fechasMismaClase = siguientesFechasClase(
-    sesionOrigen.clase.diaSemana,
-    normalizarFecha(ahora),
-    12,
-    sesionOrigen.clase.fechaInicio,
-    sesionOrigen.clase.fechaFin
-  ).filter((f) => f.getTime() !== normalizarFecha(sesionOrigen.fecha).getTime());
-
-  const sesionesMismaClaseMaterializadas = await Promise.all(
-    fechasMismaClase.map((fecha) => materializarSesion(sesionOrigen.claseId, fecha))
-  );
-
-  const mismaClaseSesiones = await prisma.sesion.findMany({
-    where: { id: { in: sesionesMismaClaseMaterializadas.map((x) => x.sesion.id) } },
-    include: { clase: { include: { profesor: true, sala: true } } },
-    orderBy: { fecha: "asc" },
-    take: 10,
-  });
-
-  const sesionesDisponiblesMismaClase = await Promise.all(
-    mismaClaseSesiones.map(async (s) => {
-      const inicio = getInicioSesion(s.fecha, s.horaInicio);
-      if (inicio <= ahora || s.cancelada) return null;
-      const ocupacion = await calcularOcupacionSesion(s.claseId, s.fecha, s.aforo);
-      if (ocupacion.libres <= 0) return null;
-      return { ...s, tipoConvenio: null as null };
-    })
-  );
-
-  // 2. Sesiones de clases con convenio activo
-  const convenios = await prisma.convenio.findMany({
+  const horariosMismaClase = await prisma.horario.findMany({
     where: {
+      claseId: sesionOrigen.claseId,
       activo: true,
-      OR: [
-        { claseAId: sesionOrigen.claseId },
-        { claseBId: sesionOrigen.claseId },
-      ],
     },
-    include: { claseA: true, claseB: true },
+    include: {
+      clase: true,
+      profesor: true,
+      sala: true,
+    },
   });
 
-  const sesionesConvenio: {
+  const mismaClase: Array<{
     id: string;
     fecha: Date;
     horaInicio: string;
     horaFin: string;
-    aforo: number;
-    cancelada: boolean;
-    claseId: string;
-    createdAt: Date;
-    updatedAt: Date;
+    clase: { nombre: string; profesor: { nombre: string }; sala: { nombre: string } };
+    tipoConvenio: null;
+  }> = [];
+
+  for (const horario of horariosMismaClase) {
+    const fechas = siguientesFechasHorario(
+      horario.diaSemana,
+      horario.fecha,
+      normalizarFecha(ahora),
+      12,
+      horario.clase.fechaInicio,
+      horario.clase.fechaFin
+    );
+
+    for (const fecha of fechas) {
+      if (
+        horario.id === sesionOrigen.horarioId &&
+        fecha.getTime() === normalizarFecha(sesionOrigen.fecha).getTime()
+      ) {
+        continue;
+      }
+
+      const { sesion } = await materializarSesion(horario.id, fecha);
+      const inicio = getInicioSesion(sesion.fecha, sesion.horaInicio);
+      if (inicio <= ahora || sesion.cancelada) continue;
+      const ocupacion = await calcularOcupacionSesion(horario.id, sesion.fecha, sesion.aforo);
+      if (ocupacion.libres <= 0) continue;
+
+      mismaClase.push({
+        id: sesion.id,
+        fecha: sesion.fecha,
+        horaInicio: sesion.horaInicio,
+        horaFin: sesion.horaFin,
+        clase: {
+          nombre: horario.clase.nombre,
+          profesor: { nombre: horario.profesor.nombre },
+          sala: { nombre: horario.sala.nombre },
+        },
+        tipoConvenio: null,
+      });
+    }
+  }
+
+  const convenios = await prisma.convenio.findMany({
+    where: {
+      activo: true,
+      OR: [{ claseAId: sesionOrigen.claseId }, { claseBId: sesionOrigen.claseId }],
+    },
+  });
+
+  const convenio: Array<{
+    id: string;
+    fecha: Date;
+    horaInicio: string;
+    horaFin: string;
     clase: { nombre: string; profesor: { nombre: string }; sala: { nombre: string } };
     tipoConvenio: "EQUIVALENTE" | "EXCEPCIONAL";
     convenioId: string;
     requiereAprobacion: boolean;
-  }[] = [];
-  for (const convenio of convenios) {
-    const claseDestinoId = convenio.claseAId === sesionOrigen.claseId ? convenio.claseBId : convenio.claseAId;
+  }> = [];
 
-    // Contar cambios ya usados este mes por este convenio
+  for (const c of convenios) {
+    const claseDestinoId = c.claseAId === sesionOrigen.claseId ? c.claseBId : c.claseAId;
+
     const inicioMes = new Date();
     inicioMes.setDate(1);
     inicioMes.setHours(0, 0, 0, 0);
@@ -150,50 +171,68 @@ export async function GET(req: Request) {
     const cambiosEsteMes = await prisma.cambio.count({
       where: {
         userId: session.user.id,
-        convenioId: convenio.id,
+        convenioId: c.id,
         estado: { in: ["PENDIENTE", "APROBADO"] },
         createdAt: { gte: inicioMes },
       },
     });
+    if (cambiosEsteMes >= c.limiteMensual) continue;
 
-    if (cambiosEsteMes >= convenio.limiteMensual) continue;
-
-    const claseDestino = await prisma.clase.findUnique({ where: { id: claseDestinoId } });
-    if (!claseDestino) continue;
-
-    const fechasDestino = siguientesFechasClase(
-      claseDestino.diaSemana,
-      normalizarFecha(ahora),
-      8,
-      claseDestino.fechaInicio,
-      claseDestino.fechaFin
-    );
-
-    const sesionesMaterializadas = await Promise.all(
-      fechasDestino.map((fecha) => materializarSesion(claseDestinoId, fecha))
-    );
-
-    const sesiones = await prisma.sesion.findMany({
-      where: { id: { in: sesionesMaterializadas.map((x) => x.sesion.id) } },
-      include: { clase: { include: { profesor: true, sala: true } } },
-      orderBy: { fecha: "asc" },
-      take: 5,
+    const horariosDestino = await prisma.horario.findMany({
+      where: {
+        claseId: claseDestinoId,
+        activo: true,
+        clase: { activa: true },
+      },
+      include: {
+        clase: true,
+        profesor: true,
+        sala: true,
+      },
+      take: 20,
     });
 
-    for (const s of sesiones) {
-      const inicio = getInicioSesion(s.fecha, s.horaInicio);
-      if (inicio <= ahora || s.cancelada) continue;
-      const ocupacion = await calcularOcupacionSesion(s.claseId, s.fecha, s.aforo);
-      if (ocupacion.libres > 0) {
-        sesionesConvenio.push({ ...s, tipoConvenio: convenio.tipo, convenioId: convenio.id, requiereAprobacion: convenio.requiereAprobacion });
+    for (const horario of horariosDestino) {
+      const fechas = siguientesFechasHorario(
+        horario.diaSemana,
+        horario.fecha,
+        normalizarFecha(ahora),
+        8,
+        horario.clase.fechaInicio,
+        horario.clase.fechaFin
+      );
+
+      for (const fecha of fechas) {
+        const { sesion } = await materializarSesion(horario.id, fecha);
+        const inicio = getInicioSesion(sesion.fecha, sesion.horaInicio);
+        if (inicio <= ahora || sesion.cancelada) continue;
+        const ocupacion = await calcularOcupacionSesion(horario.id, sesion.fecha, sesion.aforo);
+        if (ocupacion.libres <= 0) continue;
+
+        convenio.push({
+          id: sesion.id,
+          fecha: sesion.fecha,
+          horaInicio: sesion.horaInicio,
+          horaFin: sesion.horaFin,
+          clase: {
+            nombre: horario.clase.nombre,
+            profesor: { nombre: horario.profesor.nombre },
+            sala: { nombre: horario.sala.nombre },
+          },
+          tipoConvenio: c.tipo,
+          convenioId: c.id,
+          requiereAprobacion: c.requiereAprobacion,
+        });
       }
     }
   }
 
   return NextResponse.json({
-    mismaClase: sesionesDisponiblesMismaClase.filter(
-      (s): s is NonNullable<typeof s> => Boolean(s)
-    ),
-    convenio: sesionesConvenio,
+    mismaClase: mismaClase
+      .sort((a, b) => a.fecha.getTime() - b.fecha.getTime())
+      .slice(0, 10),
+    convenio: convenio
+      .sort((a, b) => a.fecha.getTime() - b.fecha.getTime())
+      .slice(0, 12),
   });
 }

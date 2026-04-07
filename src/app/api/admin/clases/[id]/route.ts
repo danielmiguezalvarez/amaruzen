@@ -6,7 +6,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
 
-  const { nombre, profesorId, salaId, aforo, recurrente, diaSemana, horaInicio, horaFin, fechaFin, activa } = await req.json();
+  const { nombre, profesorId, salaId, aforo, recurrente, diaSemana, horaInicio, horaFin, fechaFin, activa, color } = await req.json();
 
   const clase = await prisma.clase.update({
     where: { id: params.id },
@@ -20,6 +20,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       horaInicio,
       horaFin,
       fechaFin: fechaFin ? new Date(fechaFin) : null,
+      color: color || null,
       activa,
     },
     include: { profesor: true, sala: true, tipoClase: true },

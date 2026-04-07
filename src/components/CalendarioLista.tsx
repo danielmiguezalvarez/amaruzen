@@ -50,12 +50,16 @@ export default function CalendarioLista({ lunes, eventos, onClickEvento }: Props
                       : ev.esInscrito
                         ? "bg-emerald-100 text-emerald-700"
                         : "bg-stone-100 text-stone-600";
+                  const stripe = ev.color && ev.tipo === "CLASE"
+                    ? { borderLeft: `3px solid ${ev.color}` }
+                    : undefined;
                   return (
                     <button
                       key={ev.id}
                       type="button"
                       onClick={() => onClickEvento?.(ev)}
                       className="w-full text-left px-3 py-2 hover:bg-stone-50 transition-colors"
+                      style={stripe}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">

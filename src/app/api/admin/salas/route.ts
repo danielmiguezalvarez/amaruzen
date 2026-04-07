@@ -14,11 +14,11 @@ export async function POST(req: Request) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
 
-  const { nombre, descripcion, aforo } = await req.json();
+  const { nombre, descripcion, aforo, color } = await req.json();
   if (!nombre || !aforo) {
     return NextResponse.json({ error: "Nombre y aforo son obligatorios" }, { status: 400 });
   }
 
-  const sala = await prisma.sala.create({ data: { nombre, descripcion, aforo: Number(aforo) } });
+  const sala = await prisma.sala.create({ data: { nombre, descripcion, aforo: Number(aforo), color: color || null } });
   return NextResponse.json(sala, { status: 201 });
 }

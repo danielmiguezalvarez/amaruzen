@@ -10,6 +10,7 @@ import { getLunesLocal, toLocalYMD } from "@/components/calendario-utils";
 type Sesion = {
   id: string;
   sesionId: string | null;
+  horarioId: string;
   fecha: string;
   horaInicio: string;
   horaFin: string;
@@ -19,8 +20,9 @@ type Sesion = {
   clase: {
     id: string;
     nombre: string;
+    color?: string | null;
     profesor: { nombre: string };
-    sala: { id: string; nombre: string };
+    sala: { id: string; nombre: string; color?: string | null };
   };
 };
 
@@ -40,7 +42,7 @@ type Reserva = {
   fecha: string;
   horaInicio: string;
   horaFin: string;
-  sala: { id: string; nombre: string };
+  sala: { id: string; nombre: string; color?: string | null };
   profesional: { name: string | null };
 };
 
@@ -133,6 +135,7 @@ export default function ClasesClient() {
       subtitulo: s.clase.profesor.nombre,
       cancelada: s.cancelada,
       esInscrito: s.esInscrito,
+      color: s.clase.color || null,
       raw: s,
     })),
     ...reservas.map((r) => ({

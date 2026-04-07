@@ -8,6 +8,7 @@ import { getLunesLocal, toLocalYMD } from "@/components/calendario-utils";
 
 type SesionApi = {
   id?: string;
+  horarioId?: string;
   claseId: string;
   fecha: string;
   horaInicio: string;
@@ -15,8 +16,9 @@ type SesionApi = {
   cancelada: boolean;
   clase: {
     nombre: string;
+    color?: string | null;
     profesor: { nombre: string };
-    sala: { id: string; nombre: string };
+    sala: { id: string; nombre: string; color?: string | null };
   };
 };
 
@@ -26,7 +28,7 @@ type ReservaApi = {
   horaInicio: string;
   horaFin: string;
   motivo: string | null;
-  sala: { id: string; nombre: string };
+  sala: { id: string; nombre: string; color?: string | null };
   profesional: { name: string | null };
 };
 
@@ -61,7 +63,7 @@ export default function ProfesionalCalendarioPage() {
 
   const eventos: EventoCalendario[] = useMemo(() => {
     const clases = sesiones.map((s, i) => ({
-      id: s.id || `${s.claseId}_${s.fecha}_${i}`,
+      id: s.id || `${s.horarioId || s.claseId}_${s.fecha}_${i}`,
       tipo: "CLASE" as const,
       fecha: s.fecha,
       horaInicio: s.horaInicio,
@@ -71,6 +73,7 @@ export default function ProfesionalCalendarioPage() {
       titulo: s.clase.nombre,
       subtitulo: s.clase.profesor.nombre,
       cancelada: s.cancelada,
+      color: s.clase.color || null,
       raw: s,
     }));
 

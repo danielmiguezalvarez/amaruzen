@@ -1,23 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api-auth";
-import { materializarSesion, normalizarFecha } from "@/lib/sesiones";
-
-function parseSesionRef(ref: string): { claseId: string; fecha: Date } | null {
-  if (!ref.includes("__")) return null;
-  const [claseId, fechaIso] = ref.split("__");
-  if (!claseId || !fechaIso) return null;
-  const fecha = new Date(fechaIso);
-  if (Number.isNaN(fecha.getTime())) return null;
-  return { claseId, fecha: normalizarFecha(fecha) };
-}
-
-async function resolverSesionId(ref: string) {
-  const parsed = parseSesionRef(ref);
-  if (!parsed) return ref;
-  const { sesion } = await materializarSesion(parsed.claseId, parsed.fecha);
-  return sesion.id;
-}
+import { resolverSesionId } from "@/lib/sesiones";
 
 // POST /api/admin/cambios/crear
 // body: { userId, sesionOrigenId, sesionDestinoId, convenioId?, forzado?, permanente? }
@@ -33,6 +17,9 @@ export async function POST(req: Request) {
 
   const sesionOrigenRealId = await resolverSesionId(sesionOrigenId);
   const sesionDestinoRealId = await resolverSesionId(sesionDestinoId);
+  if (!sesionOrigenRealId || !sesionDestinoRealId) {
+    return NextResponse.json({ error: "Sesion origen/destino no encontrada" }, { status: 404 });
+  }
 
   const sesionOrigen = await prisma.sesion.findUnique({ where: { id: sesionOrigenRealId } });
   const sesionDestino = await prisma.sesion.findUnique({ where: { id: sesionDestinoRealId } });
@@ -41,18 +28,44 @@ export async function POST(req: Request) {
   }
 
   if (permanente) {
-    await prisma.inscripcion.updateMany({
+    const inscripcionOrigen = await prisma.inscripcion.findFirst({
       where: { userId, claseId: sesionOrigen.claseId, activa: true },
+    });
+
+    if (!inscripcionOrigen) {
+      return NextResponse.json({ error: "Inscripción origen no encontrada" }, { status: 404 });
+    }
+
+    await prisma.inscripcionHorario.updateMany({
+      where: {
+        inscripcionId: inscripcionOrigen.id,
+        horarioId: sesionOrigen.horarioId,
+      },
       data: { activa: false },
     });
 
-    const inscripcion = await prisma.inscripcion.upsert({
+    const inscripcionDestino = await prisma.inscripcion.upsert({
       where: { userId_claseId: { userId, claseId: sesionDestino.claseId } },
       update: { activa: true },
       create: { userId, claseId: sesionDestino.claseId, activa: true },
     });
 
-    return NextResponse.json({ ok: true, tipo: "PERMANENTE", inscripcion }, { status: 201 });
+    await prisma.inscripcionHorario.upsert({
+      where: {
+        inscripcionId_horarioId: {
+          inscripcionId: inscripcionDestino.id,
+          horarioId: sesionDestino.horarioId,
+        },
+      },
+      update: { activa: true },
+      create: {
+        inscripcionId: inscripcionDestino.id,
+        horarioId: sesionDestino.horarioId,
+        activa: true,
+      },
+    });
+
+    return NextResponse.json({ ok: true, tipo: "PERMANENTE", inscripcion: inscripcionDestino }, { status: 201 });
   }
 
   const cambio = await prisma.cambio.create({

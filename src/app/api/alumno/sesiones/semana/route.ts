@@ -22,22 +22,26 @@ export async function GET(req: Request) {
   const { domingo, salas, sesiones, reservas } = await calcularSesionesSemana(lunes);
 
   // Clases en las que el alumno está inscrito
-  const inscripciones = await prisma.inscripcion.findMany({
-    where: { userId: session.user.id, activa: true },
-    select: { claseId: true },
+  const inscripciones = await prisma.inscripcionHorario.findMany({
+    where: {
+      activa: true,
+      inscripcion: { userId: session.user.id, activa: true },
+    },
+    select: { horarioId: true },
   });
-  const clasesPropias = new Set(inscripciones.map((i) => i.claseId));
+  const horariosPropios = new Set(inscripciones.map((i) => i.horarioId));
 
   const sesionesConFlag = sesiones.map((s) => ({
-    id: s.sesionId || `${s.claseId}__${s.fecha.toISOString().slice(0, 10)}`,
+    id: s.sesionId || `${s.horarioId}__${s.fecha.toISOString().slice(0, 10)}`,
     sesionId: s.sesionId,
+    horarioId: s.horarioId,
     claseId: s.claseId,
     fecha: s.fecha,
     horaInicio: s.horaInicio,
     horaFin: s.horaFin,
     aforo: s.aforo,
     cancelada: s.cancelada,
-    esInscrito: clasesPropias.has(s.claseId),
+    esInscrito: horariosPropios.has(s.horarioId),
     clase: s.clase,
   }));
 

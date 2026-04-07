@@ -7,15 +7,18 @@ type Sala = {
   nombre: string;
   descripcion: string | null;
   aforo: number;
+  color: string | null;
   activa: boolean;
 };
+
+const PALETA = ["#ef4444", "#f59e0b", "#22c55e", "#14b8a6", "#0ea5e9", "#6366f1", "#ec4899", "#78716c"];
 
 export default function SalasPage() {
   const [salas, setSalas] = useState<Sala[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editando, setEditando] = useState<Sala | null>(null);
-  const [form, setForm] = useState({ nombre: "", descripcion: "", aforo: "" });
+  const [form, setForm] = useState({ nombre: "", descripcion: "", aforo: "", color: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -30,14 +33,14 @@ export default function SalasPage() {
 
   function abrirNuevo() {
     setEditando(null);
-    setForm({ nombre: "", descripcion: "", aforo: "" });
+    setForm({ nombre: "", descripcion: "", aforo: "", color: "" });
     setError("");
     setShowForm(true);
   }
 
   function abrirEditar(sala: Sala) {
     setEditando(sala);
-    setForm({ nombre: sala.nombre, descripcion: sala.descripcion || "", aforo: String(sala.aforo) });
+    setForm({ nombre: sala.nombre, descripcion: sala.descripcion || "", aforo: String(sala.aforo), color: sala.color || "" });
     setError("");
     setShowForm(true);
   }
@@ -110,7 +113,14 @@ export default function SalasPage() {
               <tbody className="divide-y divide-stone-100">
                 {salas.map((sala) => (
                   <tr key={sala.id} className="hover:bg-stone-50">
-                    <td className="px-5 py-3 font-medium text-stone-800">{sala.nombre}</td>
+                    <td className="px-5 py-3 font-medium text-stone-800">
+                      <span
+                        className="inline-flex items-center gap-2"
+                        style={sala.color ? { color: sala.color } : undefined}
+                      >
+                        {sala.nombre}
+                      </span>
+                    </td>
                     <td className="px-5 py-3 text-stone-500 hidden sm:table-cell">{sala.descripcion || "—"}</td>
                     <td className="px-5 py-3 text-stone-700">{sala.aforo}</td>
                     <td className="px-5 py-3">
@@ -170,6 +180,28 @@ export default function SalasPage() {
                   onChange={(e) => setForm({ ...form, aforo: e.target.value })}
                   className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">Color de sala (opcional)</label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {PALETA.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setForm({ ...form, color: c })}
+                      className={`w-6 h-6 rounded-full border ${form.color === c ? "ring-2 ring-stone-800" : "border-stone-300"}`}
+                      style={{ backgroundColor: c }}
+                      aria-label={`Color ${c}`}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, color: "" })}
+                    className="px-2 py-1 text-xs border border-stone-300 rounded"
+                  >
+                    Sin color
+                  </button>
+                </div>
               </div>
               <div className="flex gap-3 pt-2">
                 <button

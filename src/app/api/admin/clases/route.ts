@@ -7,7 +7,16 @@ export async function GET() {
   if (auth.error) return auth.error;
 
   const clases = await prisma.clase.findMany({
-    include: { profesor: true, sala: true, tipoClase: true },
+    include: {
+      profesor: true,
+      sala: true,
+      tipoClase: true,
+      horarios: {
+        where: { activo: true },
+        include: { profesor: true, sala: true },
+        orderBy: [{ diaSemana: "asc" }, { horaInicio: "asc" }],
+      },
+    },
     orderBy: { nombre: "asc" },
   });
   return NextResponse.json(clases);
@@ -17,7 +26,7 @@ export async function POST(req: Request) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
 
-  const { nombre, tipoNombre, tipoClaseId, profesorId, salaId, aforo, recurrente, diaSemana, horaInicio, horaFin, fechaFin } = await req.json();
+  const { nombre, tipoNombre, tipoClaseId, profesorId, salaId, aforo, recurrente, diaSemana, horaInicio, horaFin, fechaFin, color } = await req.json();
 
   if (!nombre || !profesorId || !salaId || !aforo || !horaInicio || !horaFin) {
     return NextResponse.json({ error: "Faltan campos obligatorios" }, { status: 400 });
@@ -44,6 +53,7 @@ export async function POST(req: Request) {
       horaInicio,
       horaFin,
       fechaFin: fechaFin ? new Date(fechaFin) : null,
+      color: color || null,
     },
     include: { profesor: true, sala: true, tipoClase: true },
   });

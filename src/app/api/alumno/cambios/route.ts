@@ -2,23 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { materializarSesion, normalizarFecha } from "@/lib/sesiones";
-
-function parseSesionRef(ref: string): { claseId: string; fecha: Date } | null {
-  if (!ref.includes("__")) return null;
-  const [claseId, fechaIso] = ref.split("__");
-  if (!claseId || !fechaIso) return null;
-  const fecha = new Date(fechaIso);
-  if (Number.isNaN(fecha.getTime())) return null;
-  return { claseId, fecha: normalizarFecha(fecha) };
-}
-
-async function resolverSesionId(ref: string) {
-  const parsed = parseSesionRef(ref);
-  if (!parsed) return ref;
-  const { sesion } = await materializarSesion(parsed.claseId, parsed.fecha);
-  return sesion.id;
-}
+import { resolverSesionId } from "@/lib/sesiones";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -48,6 +32,9 @@ export async function POST(req: Request) {
 
   const sesionOrigenRealId = await resolverSesionId(sesionOrigenId);
   const sesionDestinoRealId = await resolverSesionId(sesionDestinoId);
+  if (!sesionOrigenRealId || !sesionDestinoRealId) {
+    return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 });
+  }
 
   // Verificar que la sesión origen no ha empezado
   const sesionOrigen = await prisma.sesion.findUnique({ where: { id: sesionOrigenRealId } });

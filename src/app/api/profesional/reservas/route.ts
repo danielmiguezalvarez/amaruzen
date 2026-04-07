@@ -36,9 +36,9 @@ export async function POST(req: Request) {
 
   const session = auth.session;
 
-  const { salaId, fecha, horaInicio, horaFin, motivo } = await req.json();
+  const { salaId, claseId, fecha, horaInicio, horaFin, motivo } = await req.json();
 
-  if (!salaId || !fecha || !horaInicio || !horaFin) {
+  if (!salaId || !claseId || !fecha || !horaInicio || !horaFin) {
     return NextResponse.json({ error: "Faltan campos obligatorios" }, { status: 400 });
   }
 
@@ -56,23 +56,43 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Sala no encontrada o inactiva" }, { status: 404 });
   }
 
-  // Conflicto con clases recurrentes activas del mismo día y sala
+  const clase = await prisma.clase.findUnique({
+    where: { id: claseId },
+    include: {
+      horarios: {
+        include: { profesor: true },
+      },
+    },
+  });
+  const asignadaAlProfesional = Boolean(
+    clase?.horarios.some((h) => h.profesor.email && h.profesor.email === session.user.email)
+  );
+  if (!clase || !asignadaAlProfesional) {
+    return NextResponse.json({ error: "Solo puedes reservar para clases que impartes" }, { status: 403 });
+  }
+
+  // Conflicto con horarios activos del mismo día y sala
   const diaJs = fechaReserva.getDay();
   const diaSemana = ["DOMINGO", "LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"][diaJs] as DiaSemana;
 
-  const clasesSala = await prisma.clase.findMany({
+  const horariosSala = await prisma.horario.findMany({
     where: {
-      activa: true,
-      recurrente: true,
+      activo: true,
       salaId,
-      diaSemana,
+      OR: [
+        { diaSemana, fecha: null },
+        { fecha: fechaReserva },
+      ],
     },
+    include: { clase: true },
   });
 
-  const conflictoClase = clasesSala.some((clase) => {
-    if (clase.fechaInicio && fechaReserva < normalizarFecha(clase.fechaInicio)) return false;
-    if (clase.fechaFin && fechaReserva > normalizarFecha(clase.fechaFin)) return false;
-    return overlap(horaInicio, horaFin, clase.horaInicio, clase.horaFin);
+  const conflictoClase = horariosSala.some((horario) => {
+    const claseHorario = horario.clase;
+    if (!claseHorario.activa) return false;
+    if (claseHorario.fechaInicio && fechaReserva < normalizarFecha(claseHorario.fechaInicio)) return false;
+    if (claseHorario.fechaFin && fechaReserva > normalizarFecha(claseHorario.fechaFin)) return false;
+    return overlap(horaInicio, horaFin, horario.horaInicio, horario.horaFin);
   });
 
   if (conflictoClase) {
@@ -93,6 +113,7 @@ export async function POST(req: Request) {
     data: {
       salaId,
       profesionalId: session.user.id,
+      claseId,
       fecha: fechaReserva,
       horaInicio,
       horaFin,

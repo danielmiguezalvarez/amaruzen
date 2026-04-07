@@ -1,4 +1,4 @@
-export type SalaLite = { id: string; nombre: string; aforo?: number };
+export type SalaLite = { id: string; nombre: string; aforo?: number; color?: string | null };
 
 export type EventoCalendario = {
   id: string;
@@ -12,5 +12,6 @@ export type EventoCalendario = {
   subtitulo?: string;
   cancelada?: boolean;
   esInscrito?: boolean;
+  color?: string | null;
   raw: unknown;
 };

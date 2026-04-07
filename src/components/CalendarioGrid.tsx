@@ -63,7 +63,10 @@ export default function CalendarioGrid({ lunes, salas, eventos, onClickEvento, o
 
                     return (
                       <div key={sala.id} className="relative border-r border-stone-100 last:border-r-0">
-                        <div className="sticky top-0 z-[1] bg-stone-50/90 backdrop-blur border-b border-stone-100 px-1 py-1 text-[10px] text-stone-500 text-center truncate">
+                        <div
+                          className="sticky top-0 z-[1] bg-stone-50/90 backdrop-blur border-b border-stone-100 px-1 py-1 text-[10px] text-stone-500 text-center truncate"
+                          style={sala.color ? { backgroundColor: `${sala.color}2b`, borderBottomColor: `${sala.color}55` } : undefined}
+                        >
                           {sala.nombre}
                         </div>
 
@@ -90,13 +93,21 @@ export default function CalendarioGrid({ lunes, salas, eventos, onClickEvento, o
                                   ? "bg-emerald-100 border-emerald-300 text-emerald-900"
                                   : "bg-stone-100 border-stone-300 text-stone-900";
 
+                            const style = ev.color && ev.tipo === "CLASE"
+                              ? {
+                                  backgroundColor: `${ev.color}22`,
+                                  borderColor: `${ev.color}99`,
+                                  color: "#1f2937",
+                                }
+                              : undefined;
+
                             return (
                               <button
                                 key={ev.id}
                                 type="button"
                                 onClick={() => onClickEvento?.(ev)}
                                 className={`absolute left-1 right-1 rounded border px-1 py-0.5 text-left shadow-sm overflow-hidden ${baseClass}`}
-                                style={{ top: `${top}px`, height: `${height}px` }}
+                                style={{ top: `${top}px`, height: `${height}px`, ...style }}
                                 title={`${ev.titulo} ${ev.horaInicio}-${ev.horaFin}`}
                               >
                                 <p className="text-[10px] font-semibold leading-tight truncate">{ev.titulo}</p>

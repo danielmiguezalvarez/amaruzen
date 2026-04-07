@@ -6,10 +6,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
 
-  const { nombre, descripcion, aforo, activa } = await req.json();
+  const { nombre, descripcion, aforo, activa, color } = await req.json();
   const sala = await prisma.sala.update({
     where: { id: params.id },
-    data: { nombre, descripcion, aforo: Number(aforo), activa },
+    data: { nombre, descripcion, aforo: Number(aforo), activa, color: color || null },
   });
   return NextResponse.json(sala);
 }
