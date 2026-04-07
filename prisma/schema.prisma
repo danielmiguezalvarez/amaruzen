@@ -57,6 +57,7 @@ model VerificationToken {
 enum Role {
   ADMIN
   ALUMNO
+  PROFESIONAL
 }
 
 enum DiaSemana {
@@ -80,6 +81,17 @@ enum EstadoCambio {
   RECHAZADO
 }
 
+enum TipoExcepcion {
+  CANCELADA
+  REUBICADA
+}
+
+enum EstadoReserva {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -89,6 +101,7 @@ model User {
   password      String?   // null si usa OAuth
   role          Role      @default(ALUMNO)
   activo        Boolean   @default(true)
+  notificaciones Boolean  @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -96,6 +109,7 @@ model User {
   sessions      Session[]
   inscripciones Inscripcion[]
   cambios       Cambio[]
+  reservas      Reserva[]
 }
 
 model Sala {
@@ -108,6 +122,7 @@ model Sala {
   updatedAt   DateTime @updatedAt
 
   clases      Clase[]
+  reservas    Reserva[]
 }
 
 model Profesor {
@@ -143,6 +158,7 @@ model Clase {
   diaSemana   DiaSemana? // solo si recurrente = true
   horaInicio  String     // formato "HH:mm"
   horaFin     String     // formato "HH:mm"
+  fechaInicio DateTime?  // null = sin límite inferior
   fechaFin    DateTime?  // null = indefinida; si se pone, la clase termina ese día
   activa      Boolean    @default(true)
   createdAt   DateTime   @default(now())
@@ -154,8 +170,25 @@ model Clase {
 
   inscripciones        Inscripcion[]
   sesiones             Sesion[]
+  excepciones          SesionExcepcion[]
   conveniosComoClaseA  Convenio[]   @relation("ConvenioClaseA")
   conveniosComoClaseB  Convenio[]   @relation("ConvenioClaseB")
+}
+
+model SesionExcepcion {
+  id         String        @id @default(cuid())
+  claseId    String
+  fecha      DateTime
+  tipo       TipoExcepcion
+  horaInicio String?
+  horaFin    String?
+  motivo     String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  clase      Clase         @relation(fields: [claseId], references: [id])
+
+  @@unique([claseId, fecha])
 }
 
 model Sesion {
@@ -217,6 +250,7 @@ model Cambio {
   sesionDestinoId String
   convenioId      String?      // null si es cambio a la misma clase otro horario
   estado          EstadoCambio @default(PENDIENTE)
+  forzado         Boolean      @default(false)
   nota            String?      // mensaje opcional del alumno
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -225,4 +259,21 @@ model Cambio {
   sesionOrigen    Sesion       @relation("CambioOrigen", fields: [sesionOrigenId], references: [id])
   sesionDestino   Sesion       @relation("CambioDestino", fields: [sesionDestinoId], references: [id])
   convenio        Convenio?    @relation(fields: [convenioId], references: [id])
+}
+
+model Reserva {
+  id            String        @id @default(cuid())
+  salaId        String
+  profesionalId String
+  fecha         DateTime
+  horaInicio    String
+  horaFin       String
+  motivo        String?
+  estado        EstadoReserva @default(PENDIENTE)
+  notas         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  sala          Sala          @relation(fields: [salaId], references: [id])
+  profesional   User          @relation(fields: [profesionalId], references: [id])
 }

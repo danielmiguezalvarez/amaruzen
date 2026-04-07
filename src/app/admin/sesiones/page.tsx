@@ -1,169 +1,179 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import CalendarioGrid from "@/components/CalendarioGrid";
+import CalendarioLista from "@/components/CalendarioLista";
+import FichaSesionModal from "@/components/FichaSesionModal";
+import type { EventoCalendario, SalaLite } from "@/components/calendario-types";
+import { getLunesLocal, toLocalYMD } from "@/components/calendario-utils";
 
-type Sesion = {
+type SesionApi = {
   id: string;
+  sesionId: string | null;
+  claseId: string;
   fecha: string;
   horaInicio: string;
   horaFin: string;
   aforo: number;
   cancelada: boolean;
+  ocupacion: { ocupados: number };
   clase: {
     nombre: string;
     profesor: { nombre: string };
-    sala: { nombre: string };
+    sala: { id: string; nombre: string };
   };
 };
 
-const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+type ReservaApi = {
+  id: string;
+  fecha: string;
+  horaInicio: string;
+  horaFin: string;
+  motivo: string | null;
+  sala: { id: string; nombre: string };
+  profesional: { name: string | null };
+};
 
-function toLocalYMD(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function getLunesLocal(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const dia = d.getDay();
-  const diff = dia === 0 ? -6 : 1 - dia;
-  d.setDate(d.getDate() + diff);
-  return d;
-}
+type FichaData = {
+  ocupacion: { ocupados: number };
+  sesion: { aforo: number };
+  alumnos: Array<{ id: string; name: string | null; email: string }>;
+};
 
 export default function SesionesPage() {
   const [lunes, setLunes] = useState<Date>(() => getLunesLocal(new Date()));
-  const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [salas, setSalas] = useState<SalaLite[]>([]);
+  const [sesiones, setSesiones] = useState<SesionApi[]>([]);
+  const [reservas, setReservas] = useState<ReservaApi[]>([]);
+
+  const [fichaOpen, setFichaOpen] = useState(false);
+  const [fichaTitulo, setFichaTitulo] = useState("");
+  const [fichaSubtitulo, setFichaSubtitulo] = useState("");
+  const [fichaData, setFichaData] = useState<FichaData | null>(null);
 
   const cargar = useCallback(async (lunesDate: Date) => {
     setLoading(true);
     const res = await fetch(`/api/admin/sesiones/semana?fecha=${toLocalYMD(lunesDate)}`);
     if (res.ok) {
       const data = await res.json();
-      setSesiones(data.sesiones);
+      setSalas(data.salas || []);
+      setSesiones(data.sesiones || []);
+      setReservas(data.reservas || []);
     }
     setLoading(false);
   }, []);
 
-  useEffect(() => { cargar(lunes); }, [lunes, cargar]);
+  useEffect(() => {
+    cargar(lunes);
+  }, [lunes, cargar]);
 
-  function semanaAnterior() {
-    setLunes((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() - 7);
-      return d;
-    });
-  }
+  const eventos: EventoCalendario[] = useMemo(() => {
+    const eventosSesiones = sesiones.map((s) => ({
+      id: s.id,
+      tipo: "CLASE" as const,
+      fecha: s.fecha,
+      horaInicio: s.horaInicio,
+      horaFin: s.horaFin,
+      salaId: s.clase.sala.id,
+      salaNombre: s.clase.sala.nombre,
+      titulo: s.clase.nombre,
+      subtitulo: `${s.clase.profesor.nombre} · ${s.ocupacion.ocupados}/${s.aforo}`,
+      cancelada: s.cancelada,
+      raw: s,
+    }));
 
-  function semanasiguiente() {
-    setLunes((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() + 7);
-      return d;
-    });
-  }
+    const eventosReservas = reservas.map((r) => ({
+      id: `reserva_${r.id}`,
+      tipo: "RESERVA" as const,
+      fecha: r.fecha,
+      horaInicio: r.horaInicio,
+      horaFin: r.horaFin,
+      salaId: r.sala.id,
+      salaNombre: r.sala.nombre,
+      titulo: "Reserva",
+      subtitulo: r.profesional.name || "Profesional",
+      raw: r,
+    }));
 
-  function hoyEnRango() {
-    const hoyLunes = getLunesLocal(new Date());
-    return hoyLunes.getTime() === lunes.getTime();
-  }
+    return [...eventosSesiones, ...eventosReservas];
+  }, [sesiones, reservas]);
 
-  // Construir array de 7 fechas (lunes → domingo)
-  const diasSemana: Date[] = Array.from({ length: 7 }, (_, i) => {
+  const dias = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(lunes);
     d.setDate(d.getDate() + i);
     return d;
   });
+  const domingo = dias[6];
+  const labelSemana = `${lunes.getDate()} ${lunes.toLocaleString("es-ES", { month: "short" })} - ${domingo.getDate()} ${domingo.toLocaleString("es-ES", { month: "short", year: "numeric" })}`;
 
-  // Indexar sesiones por fecha (YYYY-MM-DD local)
-  const porDia: Record<string, Sesion[]> = {};
-  diasSemana.forEach((d) => { porDia[toLocalYMD(d)] = []; });
-  sesiones.forEach((s) => {
-    // Use local date to handle potential UTC shift from Supabase
-    const localKey = toLocalYMD(new Date(s.fecha));
-    if (porDia[localKey] !== undefined) {
-      porDia[localKey].push(s);
+  async function abrirFicha(ev: EventoCalendario) {
+    if (ev.tipo !== "CLASE") return;
+    const sesion = ev.raw as SesionApi;
+    setFichaTitulo(sesion.clase.nombre);
+    setFichaSubtitulo(`${new Date(sesion.fecha).toLocaleDateString("es-ES")} · ${sesion.horaInicio}-${sesion.horaFin} · ${sesion.clase.sala.nombre}`);
+    setFichaOpen(true);
+
+    const res = await fetch(`/api/admin/sesiones/ficha?sesionRef=${encodeURIComponent(sesion.id)}`);
+    if (res.ok) {
+      const data = await res.json();
+      setFichaData(data);
     }
-  });
-
-  const domingo = diasSemana[6];
-  const labelSemana = `${lunes.getDate()} ${lunes.toLocaleString("es-ES", { month: "short" })} – ${domingo.getDate()} ${domingo.toLocaleString("es-ES", { month: "short", year: "numeric" })}`;
-
-  const hoy = toLocalYMD(new Date());
+  }
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-stone-800">Sesiones</h1>
-          <p className="text-stone-500 text-sm mt-1">Vista semanal · Las sesiones se generan automáticamente</p>
+          <p className="text-stone-500 text-sm mt-1">Calendario semanal por salas</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={semanaAnterior}
-            className="p-2 rounded-lg border border-stone-200 hover:bg-stone-50 transition-colors text-stone-600">
+          <button
+            onClick={() => setLunes((prev) => { const d = new Date(prev); d.setDate(d.getDate() - 7); return d; })}
+            className="p-2 rounded-lg border border-stone-200 hover:bg-stone-50"
+          >
             ‹
           </button>
-          <span className="text-sm font-medium text-stone-700 min-w-[180px] text-center">{labelSemana}</span>
-          <button onClick={semanasiguiente}
-            className="p-2 rounded-lg border border-stone-200 hover:bg-stone-50 transition-colors text-stone-600">
+          <span className="text-sm font-medium text-stone-700 min-w-[220px] text-center">{labelSemana}</span>
+          <button
+            onClick={() => setLunes((prev) => { const d = new Date(prev); d.setDate(d.getDate() + 7); return d; })}
+            className="p-2 rounded-lg border border-stone-200 hover:bg-stone-50"
+          >
             ›
           </button>
-          {!hoyEnRango() && (
-            <button onClick={() => setLunes(getLunesLocal(new Date()))}
-              className="px-3 py-1.5 text-sm border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors text-stone-600">
-              Hoy
-            </button>
-          )}
+          <button
+            onClick={() => setLunes(getLunesLocal(new Date()))}
+            className="px-3 py-1.5 text-sm border border-stone-300 rounded-lg hover:bg-stone-50"
+          >
+            Hoy
+          </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-16 text-stone-400 text-sm">Cargando sesiones...</div>
+        <div className="text-center py-16 text-stone-400 text-sm">Cargando calendario...</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
-          {diasSemana.map((dia, i) => {
-            const key = toLocalYMD(dia);
-            const esHoy = key === hoy;
-            const sesionesDia = porDia[key] ?? [];
-
-            return (
-              <div key={key} className={`rounded-xl border overflow-hidden ${esHoy ? "border-stone-500" : "border-stone-200"}`}>
-                {/* Cabecera día */}
-                <div className={`px-3 py-2 text-center ${esHoy ? "bg-stone-800 text-white" : "bg-stone-50 text-stone-600"}`}>
-                  <p className="text-xs font-semibold uppercase tracking-wide">{DIAS[i]}</p>
-                  <p className={`text-lg font-bold leading-tight ${esHoy ? "text-white" : "text-stone-800"}`}>
-                    {dia.getDate()}
-                  </p>
-                </div>
-
-                {/* Sesiones del día */}
-                <div className="bg-white divide-y divide-stone-100 min-h-[80px]">
-                  {sesionesDia.length === 0 ? (
-                    <p className="px-3 py-4 text-xs text-stone-300 text-center">Sin sesiones</p>
-                  ) : (
-                    sesionesDia.map((s) => (
-                      <div key={s.id} className={`px-3 py-2 ${s.cancelada ? "opacity-40" : ""}`}>
-                        <p className="text-xs font-semibold text-stone-800 leading-tight">{s.clase.nombre}</p>
-                        <p className="text-xs text-stone-500 mt-0.5">{s.horaInicio} - {s.horaFin}</p>
-                        <p className="text-xs text-stone-400">{s.clase.profesor.nombre}</p>
-                        <p className="text-xs text-stone-400">{s.clase.sala.nombre}</p>
-                        {s.cancelada && (
-                          <span className="inline-block mt-1 px-1.5 py-0.5 bg-red-100 text-red-600 text-xs rounded">Cancelada</span>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <>
+          <CalendarioGrid
+            lunes={lunes}
+            salas={salas}
+            eventos={eventos}
+            onClickEvento={abrirFicha}
+          />
+          <CalendarioLista lunes={lunes} eventos={eventos} onClickEvento={abrirFicha} />
+        </>
       )}
+
+      <FichaSesionModal
+        abierto={fichaOpen}
+        onClose={() => { setFichaOpen(false); setFichaData(null); }}
+        titulo={fichaTitulo}
+        subtitulo={fichaSubtitulo}
+        ocupados={fichaData?.ocupacion.ocupados}
+        aforo={fichaData?.sesion.aforo}
+        alumnos={fichaData?.alumnos || []}
+      />
     </div>
   );
 }

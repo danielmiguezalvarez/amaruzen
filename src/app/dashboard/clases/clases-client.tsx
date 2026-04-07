@@ -2,19 +2,25 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import CalendarioGrid from "@/components/CalendarioGrid";
+import CalendarioLista from "@/components/CalendarioLista";
+import type { EventoCalendario, SalaLite } from "@/components/calendario-types";
+import { getLunesLocal, toLocalYMD } from "@/components/calendario-utils";
 
 type Sesion = {
   id: string;
+  sesionId: string | null;
   fecha: string;
   horaInicio: string;
   horaFin: string;
   aforo: number;
   cancelada: boolean;
+  esInscrito: boolean;
   clase: {
     id: string;
     nombre: string;
     profesor: { nombre: string };
-    sala: { nombre: string };
+    sala: { id: string; nombre: string };
   };
 };
 
@@ -29,28 +35,21 @@ type SesionDisponible = {
   requiereAprobacion?: boolean;
 };
 
-const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
-
-function toLocalYMD(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function getLunesLocal(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const dia = d.getDay();
-  const diff = dia === 0 ? -6 : 1 - dia;
-  d.setDate(d.getDate() + diff);
-  return d;
-}
+type Reserva = {
+  id: string;
+  fecha: string;
+  horaInicio: string;
+  horaFin: string;
+  sala: { id: string; nombre: string };
+  profesional: { name: string | null };
+};
 
 export default function ClasesClient() {
   const router = useRouter();
   const [lunes, setLunes] = useState<Date>(() => getLunesLocal(new Date()));
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
+  const [salas, setSalas] = useState<SalaLite[]>([]);
+  const [reservas, setReservas] = useState<Reserva[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Swap modal state
@@ -66,6 +65,8 @@ export default function ClasesClient() {
     if (res.ok) {
       const data = await res.json();
       setSesiones(data.sesiones);
+      setSalas(data.salas || []);
+      setReservas(data.reservas || []);
     }
     setLoading(false);
   }, []);
@@ -119,23 +120,56 @@ export default function ClasesClient() {
     setEnviando(false);
   }
 
+  const eventos: EventoCalendario[] = [
+    ...sesiones.map((s) => ({
+      id: s.id,
+      tipo: "CLASE" as const,
+      fecha: s.fecha,
+      horaInicio: s.horaInicio,
+      horaFin: s.horaFin,
+      salaId: s.clase.sala.id,
+      salaNombre: s.clase.sala.nombre,
+      titulo: s.clase.nombre,
+      subtitulo: s.clase.profesor.nombre,
+      cancelada: s.cancelada,
+      esInscrito: s.esInscrito,
+      raw: s,
+    })),
+    ...reservas.map((r) => ({
+      id: `reserva_${r.id}`,
+      tipo: "RESERVA" as const,
+      fecha: r.fecha,
+      horaInicio: r.horaInicio,
+      horaFin: r.horaFin,
+      salaId: r.sala.id,
+      salaNombre: r.sala.nombre,
+      titulo: "Reserva",
+      subtitulo: r.profesional.name || "Profesional",
+      raw: r,
+    })),
+  ];
+
   const diasSemana: Date[] = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(lunes);
     d.setDate(d.getDate() + i);
     return d;
   });
 
-  const porDia: Record<string, Sesion[]> = {};
-  diasSemana.forEach((d) => { porDia[toLocalYMD(d)] = []; });
-  sesiones.forEach((s) => {
-    const localKey = toLocalYMD(new Date(s.fecha));
-    if (porDia[localKey] !== undefined) porDia[localKey].push(s);
-  });
-
   const domingo = diasSemana[6];
   const labelSemana = `${lunes.getDate()} ${lunes.toLocaleString("es-ES", { month: "short" })} – ${domingo.getDate()} ${domingo.toLocaleString("es-ES", { month: "short", year: "numeric" })}`;
-  const hoy = toLocalYMD(new Date());
   const ahora = new Date();
+
+  function onClickEvento(ev: EventoCalendario) {
+    if (ev.tipo !== "CLASE") return;
+    const s = ev.raw as Sesion;
+    if (s.cancelada || !s.esInscrito) return;
+
+    const fechaSesion = new Date(s.fecha);
+    const [h, m] = s.horaInicio.split(":").map(Number);
+    fechaSesion.setHours(h, m, 0, 0);
+    if (fechaSesion <= ahora) return;
+    abrirCambio(s);
+  }
 
   return (
     <div className="space-y-5">
@@ -170,54 +204,10 @@ export default function ClasesClient() {
       {loading ? (
         <div className="text-center py-16 text-stone-400 text-sm">Cargando sesiones...</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
-          {diasSemana.map((dia, i) => {
-            const key = toLocalYMD(dia);
-            const esHoy = key === hoy;
-            const sesionesDia = porDia[key] ?? [];
-
-            return (
-              <div key={key} className={`rounded-xl border overflow-hidden ${esHoy ? "border-stone-500" : "border-stone-200"}`}>
-                <div className={`px-3 py-2 text-center ${esHoy ? "bg-stone-800 text-white" : "bg-stone-50 text-stone-600"}`}>
-                  <p className="text-xs font-semibold uppercase tracking-wide">{DIAS[i]}</p>
-                  <p className={`text-lg font-bold leading-tight ${esHoy ? "text-white" : "text-stone-800"}`}>
-                    {dia.getDate()}
-                  </p>
-                </div>
-                <div className="bg-white divide-y divide-stone-100 min-h-[80px]">
-                  {sesionesDia.length === 0 ? (
-                    <p className="px-3 py-4 text-xs text-stone-300 text-center">Sin sesiones</p>
-                  ) : (
-                    sesionesDia.map((s) => {
-                      const fechaSesion = new Date(s.fecha);
-                      const [h, m] = s.horaInicio.split(":").map(Number);
-                      fechaSesion.setHours(h, m, 0, 0);
-                      const yaEmpezó = fechaSesion <= ahora;
-
-                      return (
-                        <div key={s.id} className={`px-3 py-2 ${s.cancelada ? "opacity-40" : ""}`}>
-                          <p className="text-xs font-semibold text-stone-800 leading-tight">{s.clase.nombre}</p>
-                          <p className="text-xs text-stone-500 mt-0.5">{s.horaInicio} - {s.horaFin}</p>
-                          <p className="text-xs text-stone-400">{s.clase.sala.nombre}</p>
-                          {s.cancelada ? (
-                            <span className="inline-block mt-1.5 px-1.5 py-0.5 bg-red-100 text-red-600 text-xs rounded">Cancelada</span>
-                          ) : !yaEmpezó ? (
-                            <button
-                              onClick={() => abrirCambio(s)}
-                              className="mt-1.5 w-full text-xs text-stone-600 border border-stone-300 px-2 py-1 rounded hover:bg-stone-50 transition-colors"
-                            >
-                              No puedo ir
-                            </button>
-                          ) : null}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <>
+          <CalendarioGrid lunes={lunes} salas={salas} eventos={eventos} onClickEvento={onClickEvento} />
+          <CalendarioLista lunes={lunes} eventos={eventos} onClickEvento={onClickEvento} />
+        </>
       )}
 
       {/* Modal de cambio */}

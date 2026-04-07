@@ -24,6 +24,38 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     },
     include: { profesor: true, sala: true, tipoClase: true },
   });
+
+  // Actualizar sesiones futuras (aún no iniciadas) con el nuevo horario y aforo
+  const ahora = new Date();
+  ahora.setHours(0, 0, 0, 0);
+
+  await prisma.sesion.updateMany({
+    where: {
+      claseId: params.id,
+      fecha: { gte: ahora },
+    },
+    data: {
+      horaInicio,
+      horaFin,
+      aforo: Number(aforo),
+    },
+  });
+
+  // Si se añadió fechaFin, cancelar (o borrar) sesiones que queden fuera del rango
+  if (fechaFin) {
+    const limite = new Date(fechaFin);
+    limite.setHours(23, 59, 59, 999);
+    await prisma.sesion.deleteMany({
+      where: {
+        claseId: params.id,
+        fecha: { gt: limite },
+        // Solo borrar sesiones sin inscripciones activas vinculadas
+        cambiosComoOrigen: { none: {} },
+        cambiosComoDestino: { none: {} },
+      },
+    });
+  }
+
   return NextResponse.json(clase);
 }
 

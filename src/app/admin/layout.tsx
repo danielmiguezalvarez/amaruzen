@@ -9,6 +9,7 @@ const navItems = [
   { href: "/admin/alumnos", label: "Alumnos" },
   { href: "/admin/clases", label: "Clases" },
   { href: "/admin/sesiones", label: "Sesiones" },
+  { href: "/admin/reservas", label: "Reservas" },
   { href: "/admin/convenios", label: "Convenios" },
   { href: "/admin/cambios", label: "Cambios" },
   { href: "/admin/profesores", label: "Profesores" },

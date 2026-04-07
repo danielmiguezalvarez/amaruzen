@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api-auth";
-import { generarSesionesSemana, getLunes } from "@/lib/sesiones";
+import { calcularOcupacionSesion, calcularSesionesSemana, getLunes } from "@/lib/sesiones";
 
 // GET /api/admin/sesiones/semana?fecha=YYYY-MM-DD
-// Genera (si falta) y devuelve todas las sesiones de esa semana (lunes-domingo)
+// Devuelve sesiones virtuales + materializadas de la semana
 export async function GET(req: Request) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
@@ -13,25 +12,36 @@ export async function GET(req: Request) {
   const fechaParam = searchParams.get("fecha");
 
   const base = fechaParam ? new Date(fechaParam) : new Date();
+  if (Number.isNaN(base.getTime())) {
+    return NextResponse.json({ error: "Fecha inválida" }, { status: 400 });
+  }
+
   const lunes = getLunes(base);
-  const domingo = new Date(lunes);
-  domingo.setDate(domingo.getDate() + 6);
-  domingo.setHours(23, 59, 59, 999);
+  const { domingo, salas, sesiones, reservas } = await calcularSesionesSemana(lunes);
 
-  // Generar sesiones que falten para esta semana
-  await generarSesionesSemana(lunes);
-
-  const sesiones = await prisma.sesion.findMany({
-    where: { fecha: { gte: lunes, lte: domingo } },
-    include: {
-      clase: { include: { profesor: true, sala: true } },
-    },
-    orderBy: [{ fecha: "asc" }, { horaInicio: "asc" }],
-  });
+  const sesionesConOcupacion = await Promise.all(
+    sesiones.map(async (s) => {
+      const ocupacion = await calcularOcupacionSesion(s.claseId, s.fecha, s.aforo);
+      return {
+        id: s.sesionId || `${s.claseId}__${s.fecha.toISOString().slice(0, 10)}`,
+        sesionId: s.sesionId,
+        claseId: s.claseId,
+        fecha: s.fecha,
+        horaInicio: s.horaInicio,
+        horaFin: s.horaFin,
+        aforo: s.aforo,
+        cancelada: s.cancelada,
+        ocupacion,
+        clase: s.clase,
+      };
+    })
+  );
 
   return NextResponse.json({
     lunes: lunes.toISOString(),
     domingo: domingo.toISOString(),
-    sesiones,
+    salas,
+    sesiones: sesionesConOcupacion,
+    reservas,
   });
 }

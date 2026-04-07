@@ -38,6 +38,7 @@ export default function ClasesPage() {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [mensaje, setMensaje] = useState("");
 
   async function cargar() {
     const [c, p, s] = await Promise.all([
@@ -92,6 +93,7 @@ export default function ClasesPage() {
       setError(data.error || "Error al guardar");
     } else {
       setShowForm(false);
+      if (editando) setMensaje("Clase actualizada. Las sesiones futuras han sido sincronizadas.");
       cargar();
     }
     setSaving(false);
@@ -114,6 +116,12 @@ export default function ClasesPage() {
           Nueva clase
         </button>
       </div>
+
+      {mensaje && (
+        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+          {mensaje}
+        </div>
+      )}
 
       {loading ? (
         <p className="text-stone-400 text-sm">Cargando...</p>

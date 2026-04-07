@@ -8,6 +8,7 @@ const navItems = [
   { href: "/dashboard", label: "Mi panel" },
   { href: "/dashboard/clases", label: "Mis clases" },
   { href: "/dashboard/cambios", label: "Mis cambios" },
+  { href: "/dashboard/perfil", label: "Perfil" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

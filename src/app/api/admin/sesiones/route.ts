@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/api-auth";
 import { generarSesionesPorRango, getLunes } from "@/lib/sesiones";
 
-// POST /api/admin/sesiones — genera sesiones para los próximos 2 meses
+// Endpoint legado: materializa sesiones futuras bajo demanda administrativa.
+// En la nueva arquitectura no es necesario para el calendario, pero se mantiene
+// temporalmente por compatibilidad con código existente.
 export async function POST() {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
