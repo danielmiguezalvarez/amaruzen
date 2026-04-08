@@ -111,14 +111,42 @@ export async function GET(req: Request) {
       ausente: boolean;
       cambioEntrante: boolean;
       cambioSaliente: boolean;
+      esInscrito: boolean;
     }>>(Prisma.sql`
+      WITH inscritos AS (
+        SELECT u."id", u."name", u."email", true AS "esInscrito"
+        FROM "InscripcionHorario" ih
+        JOIN "Inscripcion" i ON i."id" = ih."inscripcionId"
+        JOIN "User" u ON u."id" = i."userId"
+        WHERE ih."horarioId" = ${horarioId}
+          AND ih."activa" = true
+          AND i."activa" = true
+      ),
+      entrantes AS (
+        SELECT DISTINCT u."id", u."name", u."email", false AS "esInscrito"
+        FROM "Cambio" c
+        JOIN "Sesion" sd ON sd."id" = c."sesionDestinoId"
+        JOIN "User" u ON u."id" = c."userId"
+        WHERE c."estado" IN ('PENDIENTE', 'APROBADO')
+          AND sd."horarioId" = ${horarioId}
+          AND sd."fecha" = ${fecha}
+          AND NOT EXISTS (
+            SELECT 1 FROM inscritos ins WHERE ins."id" = u."id"
+          )
+      ),
+      todos AS (
+        SELECT * FROM inscritos
+        UNION ALL
+        SELECT * FROM entrantes
+      )
       SELECT
-        u."id",
-        u."name",
-        u."email",
+        t."id",
+        t."name",
+        t."email",
+        t."esInscrito",
         EXISTS (
           SELECT 1 FROM "Ausencia" a
-          WHERE a."userId" = u."id"
+          WHERE a."userId" = t."id"
             AND a."horarioId" = ${horarioId}
             AND a."fecha" = ${fecha}
         ) AS "ausente",
@@ -126,7 +154,7 @@ export async function GET(req: Request) {
           SELECT 1
           FROM "Cambio" c
           JOIN "Sesion" sd ON sd."id" = c."sesionDestinoId"
-          WHERE c."userId" = u."id"
+          WHERE c."userId" = t."id"
             AND c."estado" IN ('PENDIENTE', 'APROBADO')
             AND sd."horarioId" = ${horarioId}
             AND sd."fecha" = ${fecha}
@@ -135,18 +163,13 @@ export async function GET(req: Request) {
           SELECT 1
           FROM "Cambio" c
           JOIN "Sesion" so ON so."id" = c."sesionOrigenId"
-          WHERE c."userId" = u."id"
+          WHERE c."userId" = t."id"
             AND c."estado" IN ('PENDIENTE', 'APROBADO')
             AND so."horarioId" = ${horarioId}
             AND so."fecha" = ${fecha}
         ) AS "cambioSaliente"
-      FROM "InscripcionHorario" ih
-      JOIN "Inscripcion" i ON i."id" = ih."inscripcionId"
-      JOIN "User" u ON u."id" = i."userId"
-      WHERE ih."horarioId" = ${horarioId}
-        AND ih."activa" = true
-        AND i."activa" = true
-      ORDER BY COALESCE(u."name", u."email") ASC
+      FROM todos t
+      ORDER BY COALESCE(t."name", t."email") ASC
     `),
   ]);
 

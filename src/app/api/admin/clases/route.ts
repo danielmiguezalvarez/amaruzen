@@ -23,8 +23,12 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const withFormData = searchParams.get("withFormData") === "1";
+  const soloRecurrentes = searchParams.get("soloRecurrentes") === "1";
+
+  const whereClase = soloRecurrentes ? { recurrente: true } : {};
 
   const clasesPromise = prisma.clase.findMany({
+    where: whereClase,
     include: {
       profesor: true,
       sala: true,

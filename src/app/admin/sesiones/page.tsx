@@ -39,7 +39,15 @@ type ReservaApi = {
 type FichaData = {
   ocupacion: { ocupados: number };
   sesion: { id: string | null; aforo: number; horarioId: string; fecha: string; claseId: string };
-  alumnos: Array<{ id: string; name: string | null; email: string }>;
+  alumnos: Array<{
+    id: string;
+    name: string | null;
+    email: string;
+    ausente: boolean;
+    cambioEntrante: boolean;
+    cambioSaliente: boolean;
+    esInscrito: boolean;
+  }>;
 };
 
 type ClaseLite = {
@@ -47,6 +55,12 @@ type ClaseLite = {
   nombre: string;
   activa?: boolean;
   profesor: { id: string; nombre: string };
+};
+
+type ProfesorLite = {
+  id: string;
+  nombre: string;
+  activo: boolean;
 };
 
 export default function SesionesPage() {
@@ -69,6 +83,8 @@ export default function SesionesPage() {
 
   const [puntualOpen, setPuntualOpen] = useState(false);
   const [clasesLite, setClasesLite] = useState<ClaseLite[]>([]);
+  const [profesoresLite, setProfesoresLite] = useState<ProfesorLite[]>([]);
+  const [modoIndependiente, setModoIndependiente] = useState(false);
   const [puntualForm, setPuntualForm] = useState({
     claseId: "",
     profesorId: "",
@@ -77,6 +93,7 @@ export default function SesionesPage() {
     horaInicio: "09:00",
     horaFin: "10:00",
     aforo: "",
+    nombre: "",
   });
   const [guardandoPuntual, setGuardandoPuntual] = useState(false);
   const [errorPuntual, setErrorPuntual] = useState("");
@@ -98,13 +115,16 @@ export default function SesionesPage() {
   }, [lunes, cargar]);
 
   useEffect(() => {
-    fetch("/api/admin/clases")
+    fetch("/api/admin/clases?soloRecurrentes=1&withFormData=1")
       .then((r) => r.json())
       .then((data) => {
-        setClasesLite((data || []).filter((c: ClaseLite) => c.activa));
+        const clases: ClaseLite[] = data.clases || [];
+        setClasesLite(clases.filter((c) => c.activa));
+        setProfesoresLite((data.profesores || []).filter((p: ProfesorLite) => p.activo));
       })
       .catch(() => {
         setClasesLite([]);
+        setProfesoresLite([]);
       });
   }, []);
 
@@ -238,7 +258,9 @@ export default function SesionesPage() {
       horaInicio: ctx.hora,
       horaFin: `${String(Math.min(Number(ctx.hora.slice(0, 2)) + 1, 22)).padStart(2, "0")}:00`,
       aforo: sala?.aforo ? String(sala.aforo) : "",
+      nombre: "",
     });
+    setModoIndependiente(false);
     setErrorPuntual("");
     setPuntualOpen(true);
   }
@@ -250,19 +272,26 @@ export default function SesionesPage() {
     setGuardandoPuntual(true);
     setErrorPuntual("");
 
-    const profId = puntualForm.profesorId || clasePuntual?.profesor.id;
+    const payload: Record<string, unknown> = {
+      salaId: puntualForm.salaId,
+      fecha: puntualForm.fecha,
+      horaInicio: puntualForm.horaInicio,
+      horaFin: puntualForm.horaFin,
+      aforo: puntualForm.aforo,
+    };
+
+    if (modoIndependiente) {
+      payload.nombre = puntualForm.nombre;
+      payload.profesorId = puntualForm.profesorId;
+    } else {
+      payload.claseId = puntualForm.claseId;
+      payload.profesorId = puntualForm.profesorId || clasePuntual?.profesor.id;
+    }
+
     const res = await fetch("/api/admin/horarios", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        claseId: puntualForm.claseId,
-        profesorId: profId,
-        salaId: puntualForm.salaId,
-        fecha: puntualForm.fecha,
-        horaInicio: puntualForm.horaInicio,
-        horaFin: puntualForm.horaFin,
-        aforo: puntualForm.aforo,
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
@@ -388,25 +417,77 @@ export default function SesionesPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
             <h2 className="text-lg font-semibold text-stone-800 mb-4">Crear clase puntual</h2>
             {errorPuntual && <div className="mb-3 p-2 rounded bg-red-50 border border-red-200 text-red-700 text-sm">{errorPuntual}</div>}
+
+            {/* Toggle: clase existente vs independiente */}
+            <div className="flex rounded-lg border border-stone-200 mb-4 text-sm overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setModoIndependiente(false)}
+                className={`flex-1 py-2 text-center transition-colors ${!modoIndependiente ? "bg-stone-800 text-white" : "bg-white text-stone-600 hover:bg-stone-50"}`}
+              >
+                Clase existente
+              </button>
+              <button
+                type="button"
+                onClick={() => setModoIndependiente(true)}
+                className={`flex-1 py-2 text-center transition-colors ${modoIndependiente ? "bg-stone-800 text-white" : "bg-white text-stone-600 hover:bg-stone-50"}`}
+              >
+                Sesion independiente
+              </button>
+            </div>
+
             <form onSubmit={crearPuntual} className="space-y-3">
-              <div>
-                <label className="block text-sm text-stone-700 mb-1">Clase</label>
-                <select
-                  required
-                  value={puntualForm.claseId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    const clase = clasesLite.find((c) => c.id === id);
-                    setPuntualForm((prev) => ({ ...prev, claseId: id, profesorId: clase?.profesor.id || "" }));
-                  }}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm"
-                >
-                  <option value="">Selecciona...</option>
-                  {clasesLite.map((c) => (
-                    <option key={c.id} value={c.id}>{c.nombre}</option>
-                  ))}
-                </select>
-              </div>
+              {!modoIndependiente ? (
+                /* --- Modo clase existente --- */
+                <div>
+                  <label className="block text-sm text-stone-700 mb-1">Clase</label>
+                  <select
+                    required
+                    value={puntualForm.claseId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const clase = clasesLite.find((c) => c.id === id);
+                      setPuntualForm((prev) => ({ ...prev, claseId: id, profesorId: clase?.profesor.id || "" }));
+                    }}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm"
+                  >
+                    <option value="">Selecciona...</option>
+                    {clasesLite.map((c) => (
+                      <option key={c.id} value={c.id}>{c.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                /* --- Modo independiente --- */
+                <>
+                  <div>
+                    <label className="block text-sm text-stone-700 mb-1">Nombre de la sesion</label>
+                    <input
+                      required
+                      type="text"
+                      placeholder="Ej: Taller de meditacion"
+                      value={puntualForm.nombre}
+                      onChange={(e) => setPuntualForm((prev) => ({ ...prev, nombre: e.target.value }))}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-stone-700 mb-1">Profesor</label>
+                    <select
+                      required
+                      value={puntualForm.profesorId}
+                      onChange={(e) => setPuntualForm((prev) => ({ ...prev, profesorId: e.target.value }))}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm"
+                    >
+                      <option value="">Selecciona...</option>
+                      {profesoresLite.map((p) => (
+                        <option key={p.id} value={p.id}>{p.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
               <div>
                 <label className="block text-sm text-stone-700 mb-1">Fecha</label>
                 <input
