@@ -208,6 +208,8 @@ model Horario {
   @@index([claseId])
   @@index([salaId])
   @@index([profesorId])
+  @@index([activo, fecha])
+  @@index([activo, diaSemana])
 }
 
 model SesionExcepcion {
@@ -224,6 +226,7 @@ model SesionExcepcion {
   horario    Horario       @relation(fields: [horarioId], references: [id])
 
   @@unique([horarioId, fecha])
+  @@index([fecha])
 }
 
 model Sesion {
@@ -245,6 +248,7 @@ model Sesion {
   cambiosComoDestino Cambio[] @relation("CambioDestino")
 
   @@unique([horarioId, fecha])
+  @@index([fecha])
 }
 
 model Inscripcion {
@@ -276,6 +280,7 @@ model InscripcionHorario {
 
   @@unique([inscripcionId, horarioId])
   @@index([horarioId])
+  @@index([horarioId, activa])
 }
 
 model Convenio {
@@ -313,6 +318,12 @@ model Cambio {
   sesionOrigen    Sesion       @relation("CambioOrigen", fields: [sesionOrigenId], references: [id])
   sesionDestino   Sesion       @relation("CambioDestino", fields: [sesionDestinoId], references: [id])
   convenio        Convenio?    @relation(fields: [convenioId], references: [id])
+
+  @@index([estado])
+  @@index([sesionOrigenId])
+  @@index([sesionDestinoId])
+  @@index([estado, sesionOrigenId])
+  @@index([estado, sesionDestinoId])
 }
 
 model Reserva {
@@ -332,6 +343,9 @@ model Reserva {
   sala          Sala          @relation(fields: [salaId], references: [id])
   profesional   User          @relation(fields: [profesionalId], references: [id])
   clase         Clase?        @relation(fields: [claseId], references: [id])
+
+  @@index([estado, fecha])
+  @@index([salaId, fecha])
 }
 
 model Ausencia {

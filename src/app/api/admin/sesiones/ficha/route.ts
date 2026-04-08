@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api-auth";
 import { sendNotificacionAdmin } from "@/lib/email";
 import {
-  calcularOcupacionSesion,
   normalizarFecha,
   resolverSesionId,
   resolverHorarioFechaDesdeRef,
@@ -35,57 +34,83 @@ export async function GET(req: Request) {
   }
   const { horarioId, fecha } = resolved;
 
-  const horario = await prisma.horario.findUnique({
-    where: { id: horarioId },
-    include: {
-      profesor: true,
-      sala: true,
-      clase: {
-        include: { tipoClase: true },
+  const [horario, alumnosInscritos, ausencias, cambiosEntrantes, cambiosSalientes, sesionMaterializada] = await Promise.all([
+    prisma.horario.findUnique({
+      where: { id: horarioId },
+      include: {
+        profesor: true,
+        sala: true,
+        clase: true,
       },
-    },
-  });
-
-  if (!horario || !horario.clase.activa) {
-    return NextResponse.json({ error: "Horario no encontrado" }, { status: 404 });
-  }
-
-  const alumnosInscritos = await prisma.inscripcionHorario.findMany({
-    where: {
-      horarioId,
-      activa: true,
-      inscripcion: { activa: true },
-    },
-    include: {
-      inscripcion: {
-        include: { user: true },
+    }),
+    prisma.inscripcionHorario.findMany({
+      where: {
+        horarioId,
+        activa: true,
+        inscripcion: { activa: true },
       },
-    },
-  });
-
-  const [ausencias, cambiosEntrantes, cambiosSalientes, sesionMaterializada] = await Promise.all([
+      select: {
+        inscripcion: {
+          select: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    }),
     prisma.ausencia.findMany({
       where: { horarioId, fecha },
-      include: { user: true },
+      select: { userId: true },
     }),
     prisma.cambio.findMany({
       where: {
         estado: { in: ["PENDIENTE", "APROBADO"] },
         sesionDestino: { horarioId, fecha },
       },
-      include: { user: true },
+      select: { userId: true },
     }),
     prisma.cambio.findMany({
       where: {
         estado: { in: ["PENDIENTE", "APROBADO"] },
         sesionOrigen: { horarioId, fecha },
       },
-      include: { user: true },
+      select: { userId: true },
     }),
-    prisma.sesion.findUnique({ where: { horarioId_fecha: { horarioId, fecha } } }),
+    prisma.sesion.findUnique({
+      where: { horarioId_fecha: { horarioId, fecha } },
+      select: {
+        id: true,
+        aforo: true,
+        horaInicio: true,
+        horaFin: true,
+        cancelada: true,
+      },
+    }),
   ]);
 
-  const ocupacion = await calcularOcupacionSesion(horarioId, fecha, sesionMaterializada?.aforo ?? horario.aforo);
+  if (!horario || !horario.clase.activa) {
+    return NextResponse.json({ error: "Horario no encontrado" }, { status: 404 });
+  }
+
+  const inscritos = alumnosInscritos.length;
+  const ausenciasCount = ausencias.length;
+  const cambiosEntrantesCount = cambiosEntrantes.length;
+  const cambiosSalientesCount = cambiosSalientes.length;
+  const ocupados = inscritos - ausenciasCount + cambiosEntrantesCount - cambiosSalientesCount;
+  const aforoSesion = sesionMaterializada?.aforo ?? horario.aforo;
+  const ocupacion = {
+    inscritos,
+    ausencias: ausenciasCount,
+    cambiosEntrantes: cambiosEntrantesCount,
+    cambiosSalientes: cambiosSalientesCount,
+    ocupados,
+    libres: aforoSesion - ocupados,
+  };
 
   const ausentesIds = new Set(ausencias.map((a) => a.userId));
   const entrantesIds = new Set(cambiosEntrantes.map((c) => c.userId));

@@ -191,14 +191,14 @@ export async function calcularSesionesSemana(lunesSemana: Date) {
     }),
     prisma.sesion.findMany({
       where: { fecha: { gte: lunes, lte: domingo } },
-      include: {
-        clase: { select: { id: true, nombre: true, color: true } },
-        horario: {
-          include: {
-            profesor: { select: { id: true, nombre: true } },
-            sala: { select: { id: true, nombre: true, color: true } },
-          },
-        },
+      select: {
+        id: true,
+        horarioId: true,
+        fecha: true,
+        horaInicio: true,
+        horaFin: true,
+        aforo: true,
+        cancelada: true,
       },
     }),
     prisma.reserva.findMany({
@@ -289,6 +289,7 @@ export async function calcularOcupacionesSemanaBatch(sesiones: SesionCalendario[
 
   const horarioIds = Array.from(new Set(sesiones.map((s) => s.horarioId)));
   const keys = new Set(sesiones.map((s) => toKey(s.horarioId, s.fecha)));
+  const fechas = Array.from(new Set(sesiones.map((s) => normalizarFecha(s.fecha).toISOString()))).map((iso) => new Date(iso));
 
   const [baseInscripciones, ausencias, cambiosEntrantes, cambiosSalientes] = await Promise.all([
     prisma.inscripcionHorario.groupBy({
@@ -303,21 +304,21 @@ export async function calcularOcupacionesSemanaBatch(sesiones: SesionCalendario[
     prisma.ausencia.findMany({
       where: {
         horarioId: { in: horarioIds },
-        fecha: { in: sesiones.map((s) => normalizarFecha(s.fecha)) },
+        fecha: { in: fechas },
       },
       select: { horarioId: true, fecha: true },
     }),
     prisma.cambio.findMany({
       where: {
         estado: { in: ["PENDIENTE", "APROBADO"] },
-        sesionDestino: { horarioId: { in: horarioIds }, fecha: { in: sesiones.map((s) => normalizarFecha(s.fecha)) } },
+        sesionDestino: { horarioId: { in: horarioIds }, fecha: { in: fechas } },
       },
       select: { sesionDestino: { select: { horarioId: true, fecha: true } } },
     }),
     prisma.cambio.findMany({
       where: {
         estado: { in: ["PENDIENTE", "APROBADO"] },
-        sesionOrigen: { horarioId: { in: horarioIds }, fecha: { in: sesiones.map((s) => normalizarFecha(s.fecha)) } },
+        sesionOrigen: { horarioId: { in: horarioIds }, fecha: { in: fechas } },
       },
       select: { sesionOrigen: { select: { horarioId: true, fecha: true } } },
     }),

@@ -52,17 +52,19 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = (user as { id: string; role: Role }).role;
         token.id = user.id;
+        token.roleChecked = true;
       }
-      // Si el role no está en el token todavía (sesión existente), lo cargamos
-      if (!token.role && token.email) {
+      // Compatibilidad con tokens antiguos sin role: solo intenta una vez.
+      if (!token.role && token.email && !token.roleChecked) {
         const dbUser = await prisma.user.findUnique({
           where: { email: token.email },
-          select: { role: true, id: true, activo: true },
+          select: { role: true, id: true },
         });
         if (dbUser) {
           token.role = dbUser.role;
           token.id = dbUser.id;
         }
+        token.roleChecked = true;
       }
       return token;
     },
