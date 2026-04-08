@@ -23,9 +23,6 @@ type Clase = {
   sala: Sala;
   aforo: number;
   recurrente: boolean;
-  diaSemana: string | null;
-  horaInicio: string;
-  horaFin: string;
   fechaFin: string | null;
   color: string | null;
   activa: boolean;
@@ -78,14 +75,10 @@ export default function ClasesPage() {
 
   async function cargar() {
     setLoading(true);
-    const [c, p, s] = await Promise.all([
-      fetch("/api/admin/clases").then((r) => r.json()),
-      fetch("/api/admin/profesores").then((r) => r.json()),
-      fetch("/api/admin/salas").then((r) => r.json()),
-    ]);
-    setClases(Array.isArray(c) ? c : []);
-    setProfesores((Array.isArray(p) ? p : []).filter((x: Profesor) => x.activo));
-    setSalas((Array.isArray(s) ? s : []).filter((x: Sala) => x.activa));
+    const data = await fetch("/api/admin/clases?withFormData=1").then((r) => r.json());
+    setClases(Array.isArray(data.clases) ? data.clases : []);
+    setProfesores((Array.isArray(data.profesores) ? data.profesores : []).filter((x: Profesor) => x.activo));
+    setSalas((Array.isArray(data.salas) ? data.salas : []).filter((x: Sala) => x.activa));
     setLoading(false);
   }
 
@@ -160,17 +153,10 @@ export default function ClasesPage() {
 
     setSaving(true);
 
-    // Usamos los datos del primer horario como campos "legacy" de la Clase
-    // (el schema los guarda pero ya no los usamos para generar sesiones)
-    const primerH = horarios[0];
-
     const payload = {
       ...form,
       aforo: Number(form.aforo),
       recurrente: true,
-      diaSemana: primerH.diaSemana,
-      horaInicio: primerH.horaInicio,
-      horaFin: primerH.horaFin,
       horarios: horarios.map((h) => ({
         id: h.id,
         diaSemana: h.diaSemana,

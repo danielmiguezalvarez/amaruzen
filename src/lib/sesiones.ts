@@ -128,17 +128,6 @@ export async function materializarSesion(horarioId: string, fecha: Date) {
     throw new Error("Fecha fuera del rango de la clase");
   }
 
-  const excepcion = await prisma.sesionExcepcion.findUnique({
-    where: { horarioId_fecha: { horarioId, fecha: fechaNorm } },
-  });
-
-  const horaInicio = excepcion?.tipo === "REUBICADA" && excepcion.horaInicio
-    ? excepcion.horaInicio
-    : horario.horaInicio;
-  const horaFin = excepcion?.tipo === "REUBICADA" && excepcion.horaFin
-    ? excepcion.horaFin
-    : horario.horaFin;
-
   const sesion = await prisma.sesion.create({
     data: {
       claseId: horario.claseId,
@@ -146,10 +135,10 @@ export async function materializarSesion(horarioId: string, fecha: Date) {
       profesorId: horario.profesorId,
       salaId: horario.salaId,
       fecha: fechaNorm,
-      horaInicio,
-      horaFin,
+      horaInicio: horario.horaInicio,
+      horaFin: horario.horaFin,
       aforo: horario.aforo,
-      cancelada: excepcion?.tipo === "CANCELADA",
+      cancelada: false,
     },
   });
 
@@ -214,17 +203,6 @@ base AS (
     AND h."fecha"::date BETWEEN '${desdeIso}'::date AND '${hastaIso}'::date
     AND (c."fechaInicio" IS NULL OR h."fecha"::date >= c."fechaInicio"::date)
     AND (c."fechaFin" IS NULL OR h."fecha"::date <= c."fechaFin"::date)
-),
-base_con_excepcion AS (
-  SELECT
-    b.*,
-    se."tipo" AS "tipoExcepcion",
-    se."horaInicio" AS "horaInicioExcepcion",
-    se."horaFin" AS "horaFinExcepcion"
-  FROM base b
-  LEFT JOIN "SesionExcepcion" se
-    ON se."horarioId" = b."horarioId"
-   AND se."fecha"::date = b."fecha"::date
 )
 INSERT INTO "Sesion" (
   "id",
@@ -247,19 +225,13 @@ SELECT
   b."profesorId",
   b."salaId",
   b."fecha",
-  CASE
-    WHEN b."tipoExcepcion" = 'REUBICADA' AND b."horaInicioExcepcion" IS NOT NULL THEN b."horaInicioExcepcion"
-    ELSE b."horaInicio"
-  END,
-  CASE
-    WHEN b."tipoExcepcion" = 'REUBICADA' AND b."horaFinExcepcion" IS NOT NULL THEN b."horaFinExcepcion"
-    ELSE b."horaFin"
-  END,
+  b."horaInicio",
+  b."horaFin",
   b."aforo",
-  CASE WHEN b."tipoExcepcion" = 'CANCELADA' THEN true ELSE false END,
+  false,
   NOW(),
   NOW()
-FROM base_con_excepcion b
+FROM base b
 ON CONFLICT ("horarioId", "fecha") DO UPDATE SET
   "claseId" = EXCLUDED."claseId",
   "profesorId" = EXCLUDED."profesorId",

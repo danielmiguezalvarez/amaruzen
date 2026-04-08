@@ -81,11 +81,6 @@ enum EstadoCambio {
   RECHAZADO
 }
 
-enum TipoExcepcion {
-  CANCELADA
-  REUBICADA
-}
-
 enum EstadoReserva {
   PENDIENTE
   APROBADA
@@ -162,9 +157,6 @@ model Clase {
   salaId      String
   aforo       Int
   recurrente  Boolean    @default(true)
-  diaSemana   DiaSemana?
-  horaInicio  String
-  horaFin     String
   color       String?
   fechaInicio DateTime?  // null = sin límite inferior
   fechaFin    DateTime?  // null = indefinida; si se pone, la clase termina ese día
@@ -203,7 +195,6 @@ model Horario {
   sala       Sala       @relation(fields: [salaId], references: [id])
 
   sesiones   Sesion[]
-  excepciones SesionExcepcion[]
   inscripcionesHorarios InscripcionHorario[]
   ausencias  Ausencia[]
 
@@ -212,23 +203,6 @@ model Horario {
   @@index([profesorId])
   @@index([activo, fecha])
   @@index([activo, diaSemana])
-}
-
-model SesionExcepcion {
-  id         String        @id @default(cuid())
-  horarioId  String
-  fecha      DateTime
-  tipo       TipoExcepcion
-  horaInicio String?
-  horaFin    String?
-  motivo     String?
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-
-  horario    Horario       @relation(fields: [horarioId], references: [id])
-
-  @@unique([horarioId, fecha])
-  @@index([fecha])
 }
 
 model Sesion {

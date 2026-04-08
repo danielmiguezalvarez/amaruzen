@@ -17,11 +17,14 @@ function horaValida(h: string) {
   return /^\d{2}:\d{2}$/.test(h);
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
 
-  const clases = await prisma.clase.findMany({
+  const { searchParams } = new URL(req.url);
+  const withFormData = searchParams.get("withFormData") === "1";
+
+  const clasesPromise = prisma.clase.findMany({
     include: {
       profesor: true,
       sala: true,
@@ -34,7 +37,18 @@ export async function GET() {
     },
     orderBy: { nombre: "asc" },
   });
-  return NextResponse.json(clases);
+
+  if (!withFormData) {
+    return NextResponse.json(await clasesPromise);
+  }
+
+  const [clases, profesores, salas] = await Promise.all([
+    clasesPromise,
+    prisma.profesor.findMany({ orderBy: { nombre: "asc" } }),
+    prisma.sala.findMany({ orderBy: { nombre: "asc" } }),
+  ]);
+
+  return NextResponse.json({ clases, profesores, salas });
 }
 
 export async function POST(req: Request) {
@@ -48,9 +62,6 @@ export async function POST(req: Request) {
     profesorId,
     salaId,
     aforo,
-    diaSemana,
-    horaInicio,
-    horaFin,
     fechaFin,
     color,
     horarios,
@@ -63,9 +74,7 @@ export async function POST(req: Request) {
   const horariosEntrada: HorarioPayload[] =
     Array.isArray(horarios) && horarios.length > 0
       ? horarios
-      : diaSemana && horaInicio && horaFin
-        ? [{ diaSemana, horaInicio, horaFin, profesorId, salaId }]
-        : [];
+      : [];
 
   if (horariosEntrada.length === 0) {
     return NextResponse.json({ error: "Debes añadir al menos un horario" }, { status: 400 });
@@ -79,8 +88,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Horario inválido: horas incorrectas" }, { status: 400 });
     }
   }
-
-  const primerHorario = horariosEntrada[0];
 
   // Resolver el tipoClaseId: usar el pasado directamente, o crear uno nuevo desde tipoNombre, o usar el nombre de la clase como fallback
   let tipoId = tipoClaseId;
@@ -99,9 +106,6 @@ export async function POST(req: Request) {
       salaId,
       aforo: Number(aforo),
       recurrente: true,
-      diaSemana: primerHorario.diaSemana,
-      horaInicio: primerHorario.horaInicio,
-      horaFin: primerHorario.horaFin,
       fechaFin: fechaFin ? new Date(fechaFin) : null,
       color: color || null,
     },

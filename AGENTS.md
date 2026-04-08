@@ -79,27 +79,40 @@ If you add a test runner in the future, define:
   - `requireAuth()`
   - `requireAdmin()`
   - `requireProfesional()`
+- JWT callback uses `roleChecked` flag to avoid querying the DB for role on every request.
 
-## Calendar Architecture (Current)
+## Calendar Architecture (Materialized Sessions)
 
 - Central concept: weekly calendar by day + room lanes.
-- Calendar data is **virtual-first**:
-  - base schedules in `Horario` (recurrentes o puntuales por `fecha`)
-  - per-session exceptions in `SesionExcepcion`
-  - approved room bookings in `Reserva`
-- Session records in `Sesion` are **materialized lazily** when required (e.g. swap operations).
+- Architecture: **materialized sessions**
+  - `Horario` defines recurring schedules (by `diaSemana`) or one-off schedules (by `fecha`)
+  - `Sesion` holds pre-generated rows for each scheduled occurrence
+  - Sessions are materialized via `upsertSesionesEnRango()` which runs a batch SQL `INSERT...ON CONFLICT`
+  - Cancellations are stored directly on `Sesion.cancelada` (manual cancellations are preserved across upserts)
+  - Approved room bookings in `Reserva`
+- **SesionExcepcion has been removed** — all session state lives in `Sesion` directly.
+- **Clase no longer has scheduling fields** (`diaSemana`, `horaInicio`, `horaFin` were removed) — all scheduling is on `Horario`.
+- A `Clase` can have multiple `Horario` records (multi-horario support).
 
 ### Key functions
 
-- `calcularSesionesSemana(lunes)` in `src/lib/sesiones.ts`
-- `materializarSesion(horarioId, fecha)` in `src/lib/sesiones.ts`
-- `calcularOcupacionSesion(horarioId, fecha, aforo)` in `src/lib/sesiones.ts`
-- `calcularOcupacionesSemanaBatch(sesiones)` in `src/lib/sesiones.ts`
+- `upsertSesionesEnRango(desde, hasta)` in `src/lib/sesiones.ts` — batch materializes sessions from active Horarios
+- `calcularSesionesSemana(lunes)` in `src/lib/sesiones.ts` — upsert + query for calendar data
+- `materializarSesion(horarioId, fecha)` in `src/lib/sesiones.ts` — single-session creation fallback
+- `calcularOcupacionesSemanaBatch(sesiones)` in `src/lib/sesiones.ts` — batch occupancy via SQL CTE
+- `calcularOcupacionSesion(horarioId, fecha, aforo)` in `src/lib/sesiones.ts` — single-session occupancy
+- `generarSesionesPorRango(desde, hasta)` in `src/lib/sesiones.ts` — public wrapper for upsert
 
 ### Occupancy rule
 
 - Occupied seats are computed as:
   - active enrollments (`InscripcionHorario`) - absences (`Ausencia`) + pending/approved incoming swaps - pending/approved outgoing swaps
+
+### Editing classes / horarios
+
+- When a `Horario` is deactivated (removed from a class), its future `Sesion` rows are deleted (if no active swaps reference them).
+- When a `Horario.diaSemana` changes, old-day sessions are deleted before the new day's sessions are generated.
+- After any class edit, `generarSesionesPorRango` is called for the next 84 days to materialize new sessions.
 
 ## API Conventions
 
@@ -113,6 +126,15 @@ If you add a test runner in the future, define:
 
 - Admin weekly calendar:
   - `GET /api/admin/sesiones/semana?fecha=YYYY-MM-DD`
+- Admin session detail:
+  - `GET /api/admin/sesiones/ficha?sesionRef=...`
+- Admin session cancellation:
+  - `POST /api/admin/sesiones/cancelar`
+- Admin classes CRUD:
+  - `GET /api/admin/clases` (supports `?withFormData=1` to include profesores + salas in one round-trip)
+  - `POST /api/admin/clases`
+  - `PUT /api/admin/clases/[id]`
+  - `DELETE /api/admin/clases/[id]`
 - Alumno weekly calendar:
   - `GET /api/alumno/sesiones/semana?fecha=YYYY-MM-DD`
 - Profesional weekly calendar:
@@ -130,7 +152,6 @@ If you add a test runner in the future, define:
 - Normalize date-only semantics to midnight when matching by day.
 - Preserve unique constraints behavior:
   - `Sesion @@unique([horarioId, fecha])`
-  - `SesionExcepcion @@unique([horarioId, fecha])`
   - `InscripcionHorario @@unique([inscripcionId, horarioId])`
 
 ## Coding Style

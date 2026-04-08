@@ -25,11 +25,8 @@ async function notificarAdmins(asunto: string, mensaje: string) {
 }
 
 export async function GET(req: Request) {
-  const t0 = Date.now();
-
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
-  const tAuth = Date.now();
 
   const { searchParams } = new URL(req.url);
   const sesionRef = searchParams.get("sesionRef");
@@ -42,7 +39,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Sesion no encontrada" }, { status: 404 });
   }
   const { horarioId, fecha } = resolved;
-  const tResolve = Date.now();
 
   let sesion = await prisma.sesion.findUnique({
     where: { horarioId_fecha: { horarioId, fecha } },
@@ -153,7 +149,6 @@ export async function GET(req: Request) {
       ORDER BY COALESCE(u."name", u."email") ASC
     `),
   ]);
-  const tQueries = Date.now();
 
   const counts = ocupacionRow[0] || {
     inscritos: BigInt(0),
@@ -175,16 +170,6 @@ export async function GET(req: Request) {
     ocupados,
     libres: sesion.aforo - ocupados,
   };
-
-  const tEnd = Date.now();
-  const timings = {
-    auth: tAuth - t0,
-    resolve: tResolve - tAuth,
-    queries: tQueries - tResolve,
-    process: tEnd - tQueries,
-    total: tEnd - t0,
-  };
-  console.log("[PERF] /api/admin/sesiones/ficha GET", timings);
 
   return NextResponse.json({
     sesion: {
@@ -213,7 +198,6 @@ export async function GET(req: Request) {
     },
     ocupacion,
     alumnos: alumnosRows,
-    _timings: timings,
   });
 }
 

@@ -26,9 +26,6 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     profesorId,
     salaId,
     aforo,
-    diaSemana,
-    horaInicio,
-    horaFin,
     fechaFin,
     activa,
     color,
@@ -38,9 +35,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const horariosEntrada: HorarioPayload[] =
     Array.isArray(horarios) && horarios.length > 0
       ? horarios
-      : diaSemana && horaInicio && horaFin
-        ? [{ diaSemana, horaInicio, horaFin, profesorId, salaId }]
-        : [];
+      : [];
 
   if (horariosEntrada.length === 0) {
     return NextResponse.json({ error: "Debes mantener al menos un horario" }, { status: 400 });
@@ -55,8 +50,6 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     }
   }
 
-  const primerHorario = horariosEntrada[0];
-
   const clase = await prisma.clase.update({
     where: { id: params.id },
     data: {
@@ -65,9 +58,6 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       salaId,
       aforo: Number(aforo),
       recurrente: true,
-      diaSemana: primerHorario.diaSemana,
-      horaInicio: primerHorario.horaInicio,
-      horaFin: primerHorario.horaFin,
       fechaFin: fechaFin ? new Date(fechaFin) : null,
       color: color || null,
       activa,
@@ -77,7 +67,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
   const horariosActivos = await prisma.horario.findMany({
     where: { claseId: params.id, activo: true, fecha: null },
-    select: { id: true },
+    select: { id: true, diaSemana: true },
   });
 
   const idsEntrada = new Set(
@@ -87,6 +77,12 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   );
 
   const idsExistentes = new Set(horariosActivos.map((h) => h.id));
+  const diaExistentePorId = new Map(
+    horariosActivos.map((h) => [h.id, h.diaSemana])
+  );
+
+  const ahora = new Date();
+  ahora.setHours(0, 0, 0, 0);
 
   // Desactivar horarios que ya no vienen en el payload
   const idsDesactivar = horariosActivos
@@ -98,11 +94,34 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       where: { id: { in: idsDesactivar } },
       data: { activo: false },
     });
+
+    // Borrar sesiones futuras de horarios desactivados que no tengan cambios vinculados
+    await prisma.sesion.deleteMany({
+      where: {
+        horarioId: { in: idsDesactivar },
+        fecha: { gte: ahora },
+        cambiosComoOrigen: { none: {} },
+        cambiosComoDestino: { none: {} },
+      },
+    });
   }
 
   // Upsert de horarios entrantes
   for (const h of horariosEntrada) {
     if (h.id && idsExistentes.has(h.id)) {
+      // Si cambió el día, borrar sesiones futuras del día viejo (quedarán huérfanas)
+      const diaAnterior = diaExistentePorId.get(h.id);
+      if (diaAnterior && diaAnterior !== h.diaSemana) {
+        await prisma.sesion.deleteMany({
+          where: {
+            horarioId: h.id,
+            fecha: { gte: ahora },
+            cambiosComoOrigen: { none: {} },
+            cambiosComoDestino: { none: {} },
+          },
+        });
+      }
+
       await prisma.horario.update({
         where: { id: h.id },
         data: {
@@ -133,8 +152,6 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 
   // Actualizar metadatos de sesiones futuras de la clase
-  const ahora = new Date();
-  ahora.setHours(0, 0, 0, 0);
 
   await prisma.sesion.updateMany({
     where: {
