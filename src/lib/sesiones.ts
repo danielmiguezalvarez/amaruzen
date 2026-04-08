@@ -344,26 +344,26 @@ export async function calcularSesionesSemana(lunesSemana: Date) {
 export async function calcularOcupacionesSemanaBatch(sesiones: SesionCalendario[]) {
   if (sesiones.length === 0) return new Map<string, OcupacionSesion>();
 
+  // Solo pasamos horarioId (text) y fecha (timestamp) al CTE — sin aforo para evitar
+  // conflictos de tipo BigInt en el driver cuando se mezclan int y bigint en VALUES.
   const objetivos = sesiones.map((s) =>
-    Prisma.sql`(${s.horarioId}, ${normalizarFecha(s.fecha)}, ${s.aforo})`
+    Prisma.sql`(${s.horarioId}::text, ${normalizarFecha(s.fecha)}::timestamp)`
   );
 
   const rows = await prisma.$queryRaw<Array<{
     horarioId: string;
     fecha: Date;
-    aforo: number;
     inscritos: bigint;
     ausencias: bigint;
     cambiosEntrantes: bigint;
     cambiosSalientes: bigint;
   }>>(Prisma.sql`
-WITH objetivo ("horarioId", "fecha", "aforo") AS (
+WITH objetivo ("horarioId", "fecha") AS (
   VALUES ${Prisma.join(objetivos)}
 )
 SELECT
   o."horarioId",
   o."fecha",
-  o."aforo",
   (
     SELECT COUNT(*)
     FROM "InscripcionHorario" ih
@@ -397,6 +397,12 @@ SELECT
 FROM objetivo o
 `);
 
+  // Construir mapa de aforo desde el array JS (evita pasarlo por SQL)
+  const aforoPorKey = new Map<string, number>();
+  for (const s of sesiones) {
+    aforoPorKey.set(toKey(s.horarioId, s.fecha), s.aforo);
+  }
+
   const ocupacionPorKey = new Map<string, OcupacionSesion>();
   for (const r of rows) {
     const inscritos = Number(r.inscritos);
@@ -404,13 +410,15 @@ FROM objetivo o
     const cambiosEntrantes = Number(r.cambiosEntrantes);
     const cambiosSalientes = Number(r.cambiosSalientes);
     const ocupados = inscritos - ausencias + cambiosEntrantes - cambiosSalientes;
-    ocupacionPorKey.set(toKey(r.horarioId, r.fecha), {
+    const k = toKey(r.horarioId, r.fecha);
+    const aforo = aforoPorKey.get(k) ?? 0;
+    ocupacionPorKey.set(k, {
       inscritos,
       ausencias,
       cambiosEntrantes,
       cambiosSalientes,
       ocupados,
-      libres: r.aforo - ocupados,
+      libres: aforo - ocupados,
     });
   }
 
