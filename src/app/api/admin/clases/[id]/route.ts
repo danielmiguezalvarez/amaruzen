@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api-auth";
+import { generarSesionesPorRango } from "@/lib/sesiones";
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const auth = await requireAdmin();
@@ -36,6 +37,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       fecha: { gte: ahora },
     },
     data: {
+      profesorId,
+      salaId,
       horaInicio,
       horaFin,
       aforo: Number(aforo),
@@ -57,6 +60,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     });
   }
 
+  const hasta = new Date(ahora);
+  hasta.setDate(hasta.getDate() + 84);
+  await generarSesionesPorRango(ahora, hasta);
+
   return NextResponse.json(clase);
 }
 
@@ -65,5 +72,12 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   if (auth.error) return auth.error;
 
   await prisma.clase.update({ where: { id: params.id }, data: { activa: false } });
+  await prisma.sesion.updateMany({
+    where: {
+      claseId: params.id,
+      fecha: { gte: new Date() },
+    },
+    data: { cancelada: true },
+  });
   return NextResponse.json({ ok: true });
 }

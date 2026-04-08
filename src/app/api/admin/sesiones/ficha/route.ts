@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api-auth";
 import { sendNotificacionAdmin } from "@/lib/email";
+import { Prisma } from "@prisma/client";
 import {
+  generarSesionesPorRango,
   normalizarFecha,
   resolverSesionId,
   resolverHorarioFechaDesdeRef,
@@ -38,88 +40,137 @@ export async function GET(req: Request) {
   const { horarioId, fecha } = resolved;
   const tResolve = Date.now();
 
-  const [horario, alumnosInscritos, ausencias, cambiosEntrantes, cambiosSalientes, sesionMaterializada] = await Promise.all([
-    prisma.horario.findUnique({
-      where: { id: horarioId },
-      include: {
-        profesor: true,
-        sala: true,
-        clase: true,
-      },
-    }),
-    prisma.inscripcionHorario.findMany({
-      where: {
-        horarioId,
-        activa: true,
-        inscripcion: { activa: true },
-      },
-      select: {
-        inscripcion: {
-          select: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-      },
-    }),
-    prisma.ausencia.findMany({
-      where: { horarioId, fecha },
-      select: { userId: true },
-    }),
-    prisma.cambio.findMany({
-      where: {
-        estado: { in: ["PENDIENTE", "APROBADO"] },
-        sesionDestino: { horarioId, fecha },
-      },
-      select: { userId: true },
-    }),
-    prisma.cambio.findMany({
-      where: {
-        estado: { in: ["PENDIENTE", "APROBADO"] },
-        sesionOrigen: { horarioId, fecha },
-      },
-      select: { userId: true },
-    }),
-    prisma.sesion.findUnique({
-      where: { horarioId_fecha: { horarioId, fecha } },
-      select: {
-        id: true,
-        aforo: true,
-        horaInicio: true,
-        horaFin: true,
-        cancelada: true,
-      },
-    }),
-  ]);
-  const tQueries = Date.now();
+  let sesion = await prisma.sesion.findUnique({
+    where: { horarioId_fecha: { horarioId, fecha } },
+    include: {
+      clase: { select: { id: true, nombre: true, color: true, activa: true } },
+      profesor: { select: { id: true, nombre: true } },
+      sala: { select: { id: true, nombre: true, color: true } },
+    },
+  });
 
-  if (!horario || !horario.clase.activa) {
+  if (!sesion) {
+    await generarSesionesPorRango(fecha, fecha);
+    sesion = await prisma.sesion.findUnique({
+      where: { horarioId_fecha: { horarioId, fecha } },
+      include: {
+        clase: { select: { id: true, nombre: true, color: true, activa: true } },
+        profesor: { select: { id: true, nombre: true } },
+        sala: { select: { id: true, nombre: true, color: true } },
+      },
+    });
+  }
+
+  if (!sesion || !sesion.clase.activa) {
     return NextResponse.json({ error: "Horario no encontrado" }, { status: 404 });
   }
 
-  const inscritos = alumnosInscritos.length;
-  const ausenciasCount = ausencias.length;
-  const cambiosEntrantesCount = cambiosEntrantes.length;
-  const cambiosSalientesCount = cambiosSalientes.length;
+  const [ocupacionRow, alumnosRows] = await Promise.all([
+    prisma.$queryRaw<Array<{
+      inscritos: bigint;
+      ausencias: bigint;
+      cambiosEntrantes: bigint;
+      cambiosSalientes: bigint;
+    }>>(Prisma.sql`
+      SELECT
+        (
+          SELECT COUNT(*)
+          FROM "InscripcionHorario" ih
+          JOIN "Inscripcion" i ON i."id" = ih."inscripcionId"
+          WHERE ih."horarioId" = ${horarioId}
+            AND ih."activa" = true
+            AND i."activa" = true
+        ) AS "inscritos",
+        (
+          SELECT COUNT(*)
+          FROM "Ausencia" a
+          WHERE a."horarioId" = ${horarioId}
+            AND a."fecha" = ${fecha}
+        ) AS "ausencias",
+        (
+          SELECT COUNT(*)
+          FROM "Cambio" c
+          JOIN "Sesion" sd ON sd."id" = c."sesionDestinoId"
+          WHERE c."estado" IN ('PENDIENTE', 'APROBADO')
+            AND sd."horarioId" = ${horarioId}
+            AND sd."fecha" = ${fecha}
+        ) AS "cambiosEntrantes",
+        (
+          SELECT COUNT(*)
+          FROM "Cambio" c
+          JOIN "Sesion" so ON so."id" = c."sesionOrigenId"
+          WHERE c."estado" IN ('PENDIENTE', 'APROBADO')
+            AND so."horarioId" = ${horarioId}
+            AND so."fecha" = ${fecha}
+        ) AS "cambiosSalientes"
+    `),
+    prisma.$queryRaw<Array<{
+      id: string;
+      name: string | null;
+      email: string;
+      ausente: boolean;
+      cambioEntrante: boolean;
+      cambioSaliente: boolean;
+    }>>(Prisma.sql`
+      SELECT
+        u."id",
+        u."name",
+        u."email",
+        EXISTS (
+          SELECT 1 FROM "Ausencia" a
+          WHERE a."userId" = u."id"
+            AND a."horarioId" = ${horarioId}
+            AND a."fecha" = ${fecha}
+        ) AS "ausente",
+        EXISTS (
+          SELECT 1
+          FROM "Cambio" c
+          JOIN "Sesion" sd ON sd."id" = c."sesionDestinoId"
+          WHERE c."userId" = u."id"
+            AND c."estado" IN ('PENDIENTE', 'APROBADO')
+            AND sd."horarioId" = ${horarioId}
+            AND sd."fecha" = ${fecha}
+        ) AS "cambioEntrante",
+        EXISTS (
+          SELECT 1
+          FROM "Cambio" c
+          JOIN "Sesion" so ON so."id" = c."sesionOrigenId"
+          WHERE c."userId" = u."id"
+            AND c."estado" IN ('PENDIENTE', 'APROBADO')
+            AND so."horarioId" = ${horarioId}
+            AND so."fecha" = ${fecha}
+        ) AS "cambioSaliente"
+      FROM "InscripcionHorario" ih
+      JOIN "Inscripcion" i ON i."id" = ih."inscripcionId"
+      JOIN "User" u ON u."id" = i."userId"
+      WHERE ih."horarioId" = ${horarioId}
+        AND ih."activa" = true
+        AND i."activa" = true
+      ORDER BY COALESCE(u."name", u."email") ASC
+    `),
+  ]);
+  const tQueries = Date.now();
+
+  const counts = ocupacionRow[0] || {
+    inscritos: BigInt(0),
+    ausencias: BigInt(0),
+    cambiosEntrantes: BigInt(0),
+    cambiosSalientes: BigInt(0),
+  };
+  const inscritos = Number(counts.inscritos);
+  const ausenciasCount = Number(counts.ausencias);
+  const cambiosEntrantesCount = Number(counts.cambiosEntrantes);
+  const cambiosSalientesCount = Number(counts.cambiosSalientes);
   const ocupados = inscritos - ausenciasCount + cambiosEntrantesCount - cambiosSalientesCount;
-  const aforoSesion = sesionMaterializada?.aforo ?? horario.aforo;
+
   const ocupacion = {
     inscritos,
     ausencias: ausenciasCount,
     cambiosEntrantes: cambiosEntrantesCount,
     cambiosSalientes: cambiosSalientesCount,
     ocupados,
-    libres: aforoSesion - ocupados,
+    libres: sesion.aforo - ocupados,
   };
-
-  const ausentesIds = new Set(ausencias.map((a) => a.userId));
-  const entrantesIds = new Set(cambiosEntrantes.map((c) => c.userId));
-  const salientesIds = new Set(cambiosSalientes.map((c) => c.userId));
 
   const tEnd = Date.now();
   const timings = {
@@ -133,38 +184,31 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     sesion: {
-      id: sesionMaterializada?.id || null,
+      id: sesion.id,
       horarioId,
-      claseId: horario.claseId,
+      claseId: sesion.claseId,
       fecha: normalizarFecha(fecha),
-      horaInicio: sesionMaterializada?.horaInicio || horario.horaInicio,
-      horaFin: sesionMaterializada?.horaFin || horario.horaFin,
-      aforo: sesionMaterializada?.aforo ?? horario.aforo,
-      cancelada: Boolean(sesionMaterializada?.cancelada),
+      horaInicio: sesion.horaInicio,
+      horaFin: sesion.horaFin,
+      aforo: sesion.aforo,
+      cancelada: Boolean(sesion.cancelada),
       clase: {
-        id: horario.clase.id,
-        nombre: horario.clase.nombre,
-        color: horario.clase.color,
+        id: sesion.clase.id,
+        nombre: sesion.clase.nombre,
+        color: sesion.clase.color,
       },
       profesor: {
-        id: horario.profesor.id,
-        nombre: horario.profesor.nombre,
+        id: sesion.profesor.id,
+        nombre: sesion.profesor.nombre,
       },
       sala: {
-        id: horario.sala.id,
-        nombre: horario.sala.nombre,
-        color: horario.sala.color,
+        id: sesion.sala.id,
+        nombre: sesion.sala.nombre,
+        color: sesion.sala.color,
       },
     },
     ocupacion,
-    alumnos: alumnosInscritos.map((ih) => ({
-      id: ih.inscripcion.user.id,
-      name: ih.inscripcion.user.name,
-      email: ih.inscripcion.user.email,
-      ausente: ausentesIds.has(ih.inscripcion.user.id),
-      cambioEntrante: entrantesIds.has(ih.inscripcion.user.id),
-      cambioSaliente: salientesIds.has(ih.inscripcion.user.id),
-    })),
+    alumnos: alumnosRows,
     _timings: timings,
   });
 }

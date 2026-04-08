@@ -126,6 +126,7 @@ model Sala {
 
   horarios    Horario[]
   clases      Clase[]
+  sesiones    Sesion[]
   reservas    Reserva[]
 }
 
@@ -140,6 +141,7 @@ model Profesor {
 
   horarios  Horario[]
   clases    Clase[]
+  sesiones  Sesion[]
 }
 
 model TipoClase {
@@ -233,6 +235,8 @@ model Sesion {
   id         String   @id @default(cuid())
   claseId    String
   horarioId  String
+  profesorId String
+  salaId     String
   fecha      DateTime // fecha concreta de la sesión
   horaInicio String   // permite sobrescribir si hay excepción
   horaFin    String
@@ -243,12 +247,17 @@ model Sesion {
 
   clase      Clase    @relation(fields: [claseId], references: [id])
   horario    Horario  @relation(fields: [horarioId], references: [id])
+  profesor   Profesor @relation(fields: [profesorId], references: [id])
+  sala       Sala     @relation(fields: [salaId], references: [id])
 
   cambiosComoOrigen  Cambio[] @relation("CambioOrigen")
   cambiosComoDestino Cambio[] @relation("CambioDestino")
 
   @@unique([horarioId, fecha])
   @@index([fecha])
+  @@index([claseId, fecha])
+  @@index([profesorId, fecha])
+  @@index([salaId, fecha])
 }
 
 model Inscripcion {

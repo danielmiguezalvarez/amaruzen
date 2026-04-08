@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api-auth";
 import { sendClaseCancelada } from "@/lib/email";
-import { normalizarFecha, parseSesionRef, resolverHorarioId } from "@/lib/sesiones";
+import {
+  generarSesionesPorRango,
+  normalizarFecha,
+  resolverHorarioFechaDesdeRef,
+  resolverHorarioId,
+} from "@/lib/sesiones";
 
 function parseDate(value: string | null | undefined) {
   if (!value) return null;
@@ -62,20 +67,21 @@ export async function POST(req: Request) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
 
-  const { sesionRef, horarioId: horarioIdBody, fecha, fechaInicio, fechaFin, motivo } = await req.json();
+  const { sesionRef, horarioId: horarioIdBody, fecha, fechaInicio, fechaFin } = await req.json();
 
   const unicaFecha = parseDate(fecha);
   const inicio = parseDate(fechaInicio);
   const fin = parseDate(fechaFin);
 
   if (sesionRef) {
-    const parsed = parseSesionRef(sesionRef);
+    const parsed = await resolverHorarioFechaDesdeRef(sesionRef);
     if (!parsed) return NextResponse.json({ error: "sesionRef inválido" }, { status: 400 });
 
-    await prisma.sesionExcepcion.upsert({
-      where: { horarioId_fecha: { horarioId: parsed.horarioId, fecha: parsed.fecha } },
-      update: { tipo: "CANCELADA", motivo: motivo || null },
-      create: { horarioId: parsed.horarioId, fecha: parsed.fecha, tipo: "CANCELADA", motivo: motivo || null },
+    await generarSesionesPorRango(parsed.fecha, parsed.fecha);
+
+    await prisma.sesion.updateMany({
+      where: { horarioId: parsed.horarioId, fecha: parsed.fecha },
+      data: { cancelada: true },
     });
     await notificarCancelacion(parsed.horarioId, parsed.fecha);
     return NextResponse.json({ ok: true, scope: "sesion" });
@@ -85,10 +91,11 @@ export async function POST(req: Request) {
     const horarioId = await resolverHorarioId(horarioIdBody);
     if (!horarioId) return NextResponse.json({ error: "Horario no encontrado" }, { status: 404 });
 
-    await prisma.sesionExcepcion.upsert({
-      where: { horarioId_fecha: { horarioId, fecha: unicaFecha } },
-      update: { tipo: "CANCELADA", motivo: motivo || null },
-      create: { horarioId, fecha: unicaFecha, tipo: "CANCELADA", motivo: motivo || null },
+    await generarSesionesPorRango(unicaFecha, unicaFecha);
+
+    await prisma.sesion.updateMany({
+      where: { horarioId, fecha: unicaFecha },
+      data: { cancelada: true },
     });
     await notificarCancelacion(horarioId, unicaFecha);
     return NextResponse.json({ ok: true, scope: "sesion" });
@@ -112,15 +119,16 @@ export async function POST(req: Request) {
       return d.getDay() === ["DOMINGO", "LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"].indexOf(horario.diaSemana);
     });
 
+    await generarSesionesPorRango(inicio, fin);
+
     let total = 0;
     for (const f of fechas) {
       if (horario.clase.fechaInicio && f < normalizarFecha(horario.clase.fechaInicio)) continue;
       if (horario.clase.fechaFin && f > normalizarFecha(horario.clase.fechaFin)) continue;
 
-      await prisma.sesionExcepcion.upsert({
-        where: { horarioId_fecha: { horarioId, fecha: f } },
-        update: { tipo: "CANCELADA", motivo: motivo || null },
-        create: { horarioId, fecha: f, tipo: "CANCELADA", motivo: motivo || null },
+      await prisma.sesion.updateMany({
+        where: { horarioId, fecha: f },
+        data: { cancelada: true },
       });
       await notificarCancelacion(horarioId, f);
       total++;
@@ -130,31 +138,25 @@ export async function POST(req: Request) {
   }
 
   if (!horarioIdBody && inicio && fin) {
-    const horarios = await prisma.horario.findMany({
-      where: { activo: true, clase: { activa: true } },
-      include: { clase: true },
+    await generarSesionesPorRango(inicio, fin);
+
+    const sesiones = await prisma.sesion.findMany({
+      where: {
+        fecha: { gte: inicio, lte: fin },
+        clase: { activa: true },
+        horario: { activo: true },
+      },
+      select: { horarioId: true, fecha: true },
     });
 
     let total = 0;
-    for (const horario of horarios) {
-      const fechas = buildDateRange(inicio, fin).filter((d) => {
-        if (horario.fecha) return normalizarFecha(horario.fecha).getTime() === d.getTime();
-        if (!horario.diaSemana) return false;
-        return d.getDay() === ["DOMINGO", "LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"].indexOf(horario.diaSemana);
+    for (const s of sesiones) {
+      await prisma.sesion.updateMany({
+        where: { horarioId: s.horarioId, fecha: s.fecha },
+        data: { cancelada: true },
       });
-
-      for (const f of fechas) {
-        if (horario.clase.fechaInicio && f < normalizarFecha(horario.clase.fechaInicio)) continue;
-        if (horario.clase.fechaFin && f > normalizarFecha(horario.clase.fechaFin)) continue;
-
-        await prisma.sesionExcepcion.upsert({
-          where: { horarioId_fecha: { horarioId: horario.id, fecha: f } },
-          update: { tipo: "CANCELADA", motivo: motivo || null },
-          create: { horarioId: horario.id, fecha: f, tipo: "CANCELADA", motivo: motivo || null },
-        });
-        await notificarCancelacion(horario.id, f);
-        total++;
-      }
+      await notificarCancelacion(s.horarioId, s.fecha);
+      total++;
     }
 
     return NextResponse.json({ ok: true, scope: "cierre_total", total });
@@ -177,7 +179,7 @@ export async function DELETE(req: Request) {
 
   let horarioId: string | null = null;
   if (sesionRef) {
-    const parsed = parseSesionRef(sesionRef);
+    const parsed = await resolverHorarioFechaDesdeRef(sesionRef);
     horarioId = parsed?.horarioId || null;
   } else if (horarioIdBody) {
     horarioId = await resolverHorarioId(horarioIdBody);
@@ -187,8 +189,11 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Falta horarioId o sesionRef" }, { status: 400 });
   }
 
-  await prisma.sesionExcepcion.deleteMany({
-    where: { horarioId, fecha: d, tipo: "CANCELADA" },
+  await generarSesionesPorRango(d, d);
+
+  await prisma.sesion.updateMany({
+    where: { horarioId, fecha: d },
+    data: { cancelada: false },
   });
 
   return NextResponse.json({ ok: true });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api-auth";
+import { generarSesionesPorRango } from "@/lib/sesiones";
 
 export async function GET() {
   const auth = await requireAdmin();
@@ -57,6 +58,12 @@ export async function POST(req: Request) {
     },
     include: { profesor: true, sala: true, tipoClase: true },
   });
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const hasta = new Date(hoy);
+  hasta.setDate(hasta.getDate() + 84);
+  await generarSesionesPorRango(hoy, hasta);
 
   return NextResponse.json(clase, { status: 201 });
 }
