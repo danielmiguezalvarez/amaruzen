@@ -83,12 +83,21 @@ export default function SesionesPage() {
 
   const cargar = useCallback(async (lunesDate: Date) => {
     setLoading(true);
+    const t0 = performance.now();
     const res = await fetch(`/api/admin/sesiones/semana?fecha=${toLocalYMD(lunesDate)}`);
+    const tFetch = performance.now();
     if (res.ok) {
       const data = await res.json();
+      const tParse = performance.now();
       setSalas(data.salas || []);
       setSesiones(data.sesiones || []);
       setReservas(data.reservas || []);
+      console.log("[PERF] Calendario carga:", {
+        fetch: Math.round(tFetch - t0),
+        parse: Math.round(tParse - tFetch),
+        total: Math.round(tParse - t0),
+        serverTimings: data._timings,
+      });
     }
     setLoading(false);
   }, []);
@@ -156,10 +165,17 @@ export default function SesionesPage() {
     setFichaOpen(true);
     setFichaLoading(true);
 
+    const t0 = performance.now();
     const res = await fetch(`/api/admin/sesiones/ficha?sesionRef=${encodeURIComponent(sesion.id)}`);
+    const tFetch = performance.now();
     if (res.ok) {
       const data = await res.json();
       setFichaData(data);
+      console.log("[PERF] Ficha carga:", {
+        fetch: Math.round(tFetch - t0),
+        total: Math.round(performance.now() - t0),
+        serverTimings: data._timings,
+      });
     }
     setFichaLoading(false);
   }

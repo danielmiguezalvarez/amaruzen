@@ -19,8 +19,11 @@ async function notificarAdmins(asunto: string, mensaje: string) {
 }
 
 export async function GET(req: Request) {
+  const t0 = Date.now();
+
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
+  const tAuth = Date.now();
 
   const { searchParams } = new URL(req.url);
   const sesionRef = searchParams.get("sesionRef");
@@ -33,6 +36,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Sesion no encontrada" }, { status: 404 });
   }
   const { horarioId, fecha } = resolved;
+  const tResolve = Date.now();
 
   const [horario, alumnosInscritos, ausencias, cambiosEntrantes, cambiosSalientes, sesionMaterializada] = await Promise.all([
     prisma.horario.findUnique({
@@ -92,6 +96,7 @@ export async function GET(req: Request) {
       },
     }),
   ]);
+  const tQueries = Date.now();
 
   if (!horario || !horario.clase.activa) {
     return NextResponse.json({ error: "Horario no encontrado" }, { status: 404 });
@@ -115,6 +120,16 @@ export async function GET(req: Request) {
   const ausentesIds = new Set(ausencias.map((a) => a.userId));
   const entrantesIds = new Set(cambiosEntrantes.map((c) => c.userId));
   const salientesIds = new Set(cambiosSalientes.map((c) => c.userId));
+
+  const tEnd = Date.now();
+  const timings = {
+    auth: tAuth - t0,
+    resolve: tResolve - tAuth,
+    queries: tQueries - tResolve,
+    process: tEnd - tQueries,
+    total: tEnd - t0,
+  };
+  console.log("[PERF] /api/admin/sesiones/ficha GET", timings);
 
   return NextResponse.json({
     sesion: {
@@ -150,6 +165,7 @@ export async function GET(req: Request) {
       cambioEntrante: entrantesIds.has(ih.inscripcion.user.id),
       cambioSaliente: salientesIds.has(ih.inscripcion.user.id),
     })),
+    _timings: timings,
   });
 }
 
