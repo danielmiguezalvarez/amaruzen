@@ -7,49 +7,56 @@ import { calcularSesionesSemana, getLunes } from "@/lib/sesiones";
 // GET /api/alumno/sesiones/semana?fecha=YYYY-MM-DD
 // Devuelve sesiones del centro, marcando cuáles son del alumno
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  const { searchParams } = new URL(req.url);
-  const fechaParam = searchParams.get("fecha");
+    const { searchParams } = new URL(req.url);
+    const fechaParam = searchParams.get("fecha");
 
-  const base = fechaParam ? new Date(fechaParam) : new Date();
-  if (Number.isNaN(base.getTime())) {
-    return NextResponse.json({ error: "Fecha inválida" }, { status: 400 });
+    const base = fechaParam ? new Date(fechaParam) : new Date();
+    if (Number.isNaN(base.getTime())) {
+      return NextResponse.json({ error: "Fecha inválida" }, { status: 400 });
+    }
+
+    const lunes = getLunes(base);
+    const { domingo, salas, sesiones, reservas } = await calcularSesionesSemana(lunes);
+
+    const inscripciones = await prisma.inscripcionHorario.findMany({
+      where: {
+        activa: true,
+        inscripcion: { userId: session.user.id, activa: true },
+      },
+      select: { horarioId: true },
+    });
+    const horariosPropios = new Set(inscripciones.map((i) => i.horarioId));
+
+    const sesionesConFlag = sesiones.map((s) => ({
+      id: s.sesionId || `${s.horarioId}__${s.fecha.toISOString().slice(0, 10)}`,
+      sesionId: s.sesionId,
+      horarioId: s.horarioId,
+      claseId: s.claseId,
+      fecha: s.fecha,
+      horaInicio: s.horaInicio,
+      horaFin: s.horaFin,
+      aforo: s.aforo,
+      cancelada: s.cancelada,
+      esInscrito: horariosPropios.has(s.horarioId),
+      clase: s.clase,
+    }));
+
+    return NextResponse.json({
+      lunes: lunes.toISOString(),
+      domingo: domingo.toISOString(),
+      salas,
+      sesiones: sesionesConFlag,
+      reservas,
+    });
+  } catch (err) {
+    console.error("[ERROR] /api/alumno/sesiones/semana", err);
+    return NextResponse.json(
+      { error: String(err instanceof Error ? err.message : err) },
+      { status: 500 }
+    );
   }
-
-  const lunes = getLunes(base);
-  const { domingo, salas, sesiones, reservas } = await calcularSesionesSemana(lunes);
-
-  // Clases en las que el alumno está inscrito
-  const inscripciones = await prisma.inscripcionHorario.findMany({
-    where: {
-      activa: true,
-      inscripcion: { userId: session.user.id, activa: true },
-    },
-    select: { horarioId: true },
-  });
-  const horariosPropios = new Set(inscripciones.map((i) => i.horarioId));
-
-  const sesionesConFlag = sesiones.map((s) => ({
-    id: s.sesionId || `${s.horarioId}__${s.fecha.toISOString().slice(0, 10)}`,
-    sesionId: s.sesionId,
-    horarioId: s.horarioId,
-    claseId: s.claseId,
-    fecha: s.fecha,
-    horaInicio: s.horaInicio,
-    horaFin: s.horaFin,
-    aforo: s.aforo,
-    cancelada: s.cancelada,
-    esInscrito: horariosPropios.has(s.horarioId),
-    clase: s.clase,
-  }));
-
-  return NextResponse.json({
-    lunes: lunes.toISOString(),
-    domingo: domingo.toISOString(),
-    salas,
-    sesiones: sesionesConFlag,
-    reservas,
-  });
 }
