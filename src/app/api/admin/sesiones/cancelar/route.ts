@@ -43,18 +43,22 @@ async function notificarCancelacion(horarioId: string, fecha: Date) {
     },
   });
 
-  await Promise.all(
-    inscripciones.map(async (ih) => {
-      const alumno = ih.inscripcion.user;
-      if (!alumno.notificaciones) return;
-      await sendClaseCancelada({
-        to: alumno.email,
-        nombre: alumno.name || "Alumno",
-        claseNombre: ih.inscripcion.clase.nombre,
-        fecha,
-      });
-    })
-  );
+  try {
+    await Promise.all(
+      inscripciones.map(async (ih) => {
+        const alumno = ih.inscripcion.user;
+        if (!alumno.notificaciones) return;
+        await sendClaseCancelada({
+          to: alumno.email,
+          nombre: alumno.name || "Alumno",
+          claseNombre: ih.inscripcion.clase.nombre,
+          fecha,
+        });
+      })
+    );
+  } catch {
+    // Ignorar errores de email — la operación principal ya se completó
+  }
 }
 
 // POST /api/admin/sesiones/cancelar

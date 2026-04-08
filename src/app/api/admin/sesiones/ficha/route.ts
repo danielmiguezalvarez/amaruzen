@@ -15,9 +15,13 @@ async function notificarAdmins(asunto: string, mensaje: string) {
     where: { role: "ADMIN", activo: true, notificaciones: true },
     select: { email: true },
   });
-  await Promise.all(
-    admins.map((a) => sendNotificacionAdmin({ to: a.email, asunto, mensaje }))
-  );
+  try {
+    await Promise.all(
+      admins.map((a) => sendNotificacionAdmin({ to: a.email, asunto, mensaje }))
+    );
+  } catch {
+    // Ignorar errores de email — la operación principal ya se completó
+  }
 }
 
 export async function GET(req: Request) {

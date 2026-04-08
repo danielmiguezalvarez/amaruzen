@@ -27,6 +27,19 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     include: { profesor: true, sala: true, tipoClase: true },
   });
 
+  // Mantener el Horario activo de esta clase en sincronía con los campos de scheduling
+  await prisma.horario.updateMany({
+    where: { claseId: params.id, activo: true },
+    data: {
+      profesorId,
+      salaId,
+      diaSemana: recurrente ? diaSemana : null,
+      horaInicio,
+      horaFin,
+      aforo: Number(aforo),
+    },
+  });
+
   // Actualizar sesiones futuras (aún no iniciadas) con el nuevo horario y aforo
   const ahora = new Date();
   ahora.setHours(0, 0, 0, 0);
@@ -71,11 +84,14 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
 
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
   await prisma.clase.update({ where: { id: params.id }, data: { activa: false } });
   await prisma.sesion.updateMany({
     where: {
       claseId: params.id,
-      fecha: { gte: new Date() },
+      fecha: { gte: hoy },
     },
     data: { cancelada: true },
   });
