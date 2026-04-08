@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { DIAS_CORTOS, HORAS_DESKTOP, buildWeekDays, horaToDecimal, toLocalYMD } from "@/components/calendario-utils";
 import type { EventoCalendario, SalaLite } from "@/components/calendario-types";
 
@@ -14,25 +15,36 @@ type Props = {
 const START_HOUR = 8;
 const END_HOUR = 22;
 const PX_PER_HOUR = 48;
+const GRID_HEIGHT = (END_HOUR - START_HOUR) * PX_PER_HOUR;
 
-export default function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onClickHueco }: Props) {
-  const dias = buildWeekDays(lunes);
+function snapToHour(clientY: number, rect: DOMRect): string {
+  const relY = Math.max(0, clientY - rect.top);
+  const hour = Math.floor(relY / PX_PER_HOUR) + START_HOUR;
+  const clamped = Math.min(Math.max(hour, START_HOUR), END_HOUR - 1);
+  return `${String(clamped).padStart(2, "0")}:00`;
+}
 
-  const eventosByDiaSala: Record<string, EventoCalendario[]> = {};
-  for (const ev of eventos) {
-    const fecha = toLocalYMD(new Date(ev.fecha));
-    const key = `${fecha}__${ev.salaId}`;
-    if (!eventosByDiaSala[key]) eventosByDiaSala[key] = [];
-    eventosByDiaSala[key].push(ev);
-  }
+function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onClickHueco }: Props) {
+  const dias = useMemo(() => buildWeekDays(lunes), [lunes]);
 
-  Object.values(eventosByDiaSala).forEach((list) => {
-    list.sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
-  });
+  const eventosByDiaSala = useMemo(() => {
+    const map: Record<string, EventoCalendario[]> = {};
+    for (const ev of eventos) {
+      const fecha = toLocalYMD(new Date(ev.fecha));
+      const key = `${fecha}__${ev.salaId}`;
+      if (!map[key]) map[key] = [];
+      map[key].push(ev);
+    }
+    Object.values(map).forEach((list) => {
+      list.sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+    });
+    return map;
+  }, [eventos]);
 
   return (
     <div className="hidden lg:block bg-white border border-stone-200 rounded-xl overflow-auto">
       <div className="min-w-[1200px]">
+        {/* Day headers */}
         <div className="grid" style={{ gridTemplateColumns: `64px repeat(7, minmax(0, 1fr))` }}>
           <div className="border-b border-r border-stone-200 bg-stone-50" />
           {dias.map((d, i) => (
@@ -43,7 +55,9 @@ export default function CalendarioGrid({ lunes, salas, eventos, onClickEvento, o
           ))}
         </div>
 
+        {/* Body */}
         <div className="grid" style={{ gridTemplateColumns: `64px repeat(7, minmax(0, 1fr))` }}>
+          {/* Hour labels */}
           <div className="border-r border-stone-200">
             {HORAS_DESKTOP.map((h) => (
               <div key={h} className="h-12 border-b border-stone-100 px-1 text-[10px] text-stone-400 text-right pt-0.5">
@@ -52,6 +66,7 @@ export default function CalendarioGrid({ lunes, salas, eventos, onClickEvento, o
             ))}
           </div>
 
+          {/* Day columns */}
           {dias.map((dia) => {
             const fecha = toLocalYMD(dia);
             return (
@@ -63,6 +78,7 @@ export default function CalendarioGrid({ lunes, salas, eventos, onClickEvento, o
 
                     return (
                       <div key={sala.id} className="relative border-r border-stone-100 last:border-r-0">
+                        {/* Sala header */}
                         <div
                           className="sticky top-0 z-[1] bg-stone-50/90 backdrop-blur border-b border-stone-100 px-1 py-1 text-[10px] text-stone-500 text-center truncate"
                           style={sala.color ? { backgroundColor: `${sala.color}2b`, borderBottomColor: `${sala.color}55` } : undefined}
@@ -70,18 +86,26 @@ export default function CalendarioGrid({ lunes, salas, eventos, onClickEvento, o
                           {sala.nombre}
                         </div>
 
-                        <div className="relative" style={{ height: `${(END_HOUR - START_HOUR) * PX_PER_HOUR}px` }}>
+                        {/* Grid body — single click-to-snap area replaces per-hour buttons */}
+                        <div
+                          className="relative"
+                          style={{ height: `${GRID_HEIGHT}px` }}
+                          onClick={onClickHueco ? (e) => {
+                            const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                            const hora = snapToHour(e.clientY, rect);
+                            onClickHueco({ fecha, salaId: sala.id, hora });
+                          } : undefined}
+                        >
+                          {/* Hour guide lines */}
                           {HORAS_DESKTOP.map((h) => (
-                            <button
+                            <div
                               key={h}
-                              type="button"
-                              onClick={() => onClickHueco?.({ fecha, salaId: sala.id, hora: `${String(h).padStart(2, "0")}:00` })}
-                              className="absolute left-0 right-0 border-b border-stone-100 hover:bg-stone-50/70 transition-colors"
+                              className="absolute left-0 right-0 border-b border-stone-100 pointer-events-none"
                               style={{ top: `${(h - START_HOUR) * PX_PER_HOUR}px`, height: `${PX_PER_HOUR}px` }}
-                              aria-label={`Hueco ${fecha} ${sala.nombre} ${h}:00`}
                             />
                           ))}
 
+                          {/* Events */}
                           {eventosSala.map((ev) => {
                             const top = (horaToDecimal(ev.horaInicio) - START_HOUR) * PX_PER_HOUR;
                             const height = Math.max((horaToDecimal(ev.horaFin) - horaToDecimal(ev.horaInicio)) * PX_PER_HOUR, 20);
@@ -93,21 +117,28 @@ export default function CalendarioGrid({ lunes, salas, eventos, onClickEvento, o
                                   ? "bg-emerald-100 border-emerald-300 text-emerald-900"
                                   : "bg-stone-100 border-stone-300 text-stone-900";
 
-                            const style = ev.color && ev.tipo === "CLASE"
-                              ? {
-                                  backgroundColor: `${ev.color}22`,
-                                  borderColor: `${ev.color}99`,
-                                  color: "#1f2937",
-                                }
-                              : undefined;
+                            const style: React.CSSProperties = {
+                              top: `${top}px`,
+                              height: `${height}px`,
+                              ...(ev.color && ev.tipo === "CLASE"
+                                ? {
+                                    backgroundColor: `${ev.color}22`,
+                                    borderColor: `${ev.color}99`,
+                                    color: "#1f2937",
+                                  }
+                                : {}),
+                            };
 
                             return (
                               <button
                                 key={ev.id}
                                 type="button"
-                                onClick={() => onClickEvento?.(ev)}
-                                className={`absolute left-1 right-1 rounded border px-1 py-0.5 text-left shadow-sm overflow-hidden ${baseClass}`}
-                                style={{ top: `${top}px`, height: `${height}px`, ...style }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onClickEvento?.(ev);
+                                }}
+                                className={`absolute left-1 right-1 rounded border px-1 py-0.5 text-left shadow-sm overflow-hidden z-[2] ${baseClass}`}
+                                style={style}
                                 title={`${ev.titulo} ${ev.horaInicio}-${ev.horaFin}`}
                               >
                                 <p className="text-[10px] font-semibold leading-tight truncate">{ev.titulo}</p>
@@ -129,3 +160,5 @@ export default function CalendarioGrid({ lunes, salas, eventos, onClickEvento, o
     </div>
   );
 }
+
+export default memo(CalendarioGrid);

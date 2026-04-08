@@ -279,8 +279,8 @@ export default function SesionesPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-stone-800">Sesiones</h1>
-          <p className="text-stone-500 text-sm mt-1">Calendario semanal por salas</p>
+          <h1 className="text-2xl font-bold text-stone-800">Calendario</h1>
+          <p className="text-stone-500 text-sm mt-1">Vista semanal por salas</p>
         </div>
         <div className="flex items-center gap-2">
           <button
