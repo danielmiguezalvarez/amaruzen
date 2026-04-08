@@ -21,6 +21,7 @@ type Props = {
   cargando?: boolean;
   onMoverAlumno?: (alumnoId: string) => void;
   onAusenciaAlumno?: (alumnoId: string) => void;
+  onEliminarSesion?: () => void;
 };
 
 function etiquetaEstado(a: Alumno) {
@@ -42,6 +43,7 @@ export default function FichaSesionModal({
   cargando = false,
   onMoverAlumno,
   onAusenciaAlumno,
+  onEliminarSesion,
 }: Props) {
   if (!abierto) return null;
 
@@ -61,6 +63,18 @@ export default function FichaSesionModal({
           <p className="text-sm font-semibold text-stone-800">{titulo}</p>
           <p className="text-xs text-stone-500 mt-1">{subtitulo}</p>
         </div>
+
+        {onEliminarSesion && (
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={onEliminarSesion}
+              className="w-full py-2 border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50"
+            >
+              Eliminar sesion
+            </button>
+          </div>
+        )}
 
         {typeof ocupados === "number" && typeof aforo === "number" && (
           <div className="mb-4">

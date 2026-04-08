@@ -7,11 +7,12 @@ type Props = {
   lunes: Date;
   eventos: EventoCalendario[];
   onClickEvento?: (evento: EventoCalendario) => void;
+  onEliminarEvento?: (evento: EventoCalendario) => void;
 };
 
 const DIAS = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"];
 
-export default function CalendarioLista({ lunes, eventos, onClickEvento }: Props) {
+export default function CalendarioLista({ lunes, eventos, onClickEvento, onEliminarEvento }: Props) {
   const dias = buildWeekDays(lunes);
 
   const porDia: Record<string, EventoCalendario[]> = {};
@@ -54,24 +55,33 @@ export default function CalendarioLista({ lunes, eventos, onClickEvento }: Props
                     ? { borderLeft: `3px solid ${ev.color}` }
                     : undefined;
                   return (
-                    <button
-                      key={ev.id}
-                      type="button"
-                      onClick={() => onClickEvento?.(ev)}
-                      className="w-full text-left px-3 py-2 hover:bg-stone-50 transition-colors"
-                      style={stripe}
-                    >
+                    <div key={ev.id} className="w-full px-3 py-2 hover:bg-stone-50 transition-colors" style={stripe}>
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => onClickEvento?.(ev)}
+                          className="min-w-0 text-left flex-1"
+                        >
                           <p className="text-xs font-semibold text-stone-800 truncate">{ev.titulo}</p>
                           <p className="text-xs text-stone-500 truncate">{ev.horaInicio} - {ev.horaFin}</p>
                           <p className="text-xs text-stone-400 truncate">{ev.salaNombre}</p>
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-1.5 py-0.5 text-[10px] rounded ${badge}`}>
+                            {ev.tipo === "RESERVA" ? "Reserva" : "Clase"}
+                          </span>
+                          {onEliminarEvento && ev.tipo === "CLASE" && (
+                            <button
+                              type="button"
+                              onClick={() => onEliminarEvento(ev)}
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700"
+                            >
+                              Eliminar
+                            </button>
+                          )}
                         </div>
-                        <span className={`px-1.5 py-0.5 text-[10px] rounded ${badge}`}>
-                          {ev.tipo === "RESERVA" ? "Reserva" : "Clase"}
-                        </span>
                       </div>
-                    </button>
+                    </div>
                   );
                 })
               )}

@@ -9,6 +9,7 @@ type Props = {
   salas: SalaLite[];
   eventos: EventoCalendario[];
   onClickEvento?: (evento: EventoCalendario) => void;
+  onEliminarEvento?: (evento: EventoCalendario) => void;
   onClickHueco?: (ctx: { fecha: string; salaId: string; hora: string }) => void;
 };
 
@@ -24,7 +25,7 @@ function snapToHour(clientY: number, rect: DOMRect): string {
   return `${String(clamped).padStart(2, "0")}:00`;
 }
 
-function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onClickHueco }: Props) {
+function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onEliminarEvento, onClickHueco }: Props) {
   const dias = useMemo(() => buildWeekDays(lunes), [lunes]);
 
   const eventosByDiaSala = useMemo(() => {
@@ -118,8 +119,6 @@ function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onClickHueco }: 
                                   : "bg-stone-100 border-stone-300 text-stone-900";
 
                             const style: React.CSSProperties = {
-                              top: `${top}px`,
-                              height: `${height}px`,
                               ...(ev.color && ev.tipo === "CLASE"
                                 ? {
                                     backgroundColor: `${ev.color}22`,
@@ -130,21 +129,35 @@ function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onClickHueco }: 
                             };
 
                             return (
-                              <button
-                                key={ev.id}
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onClickEvento?.(ev);
-                                }}
-                                className={`absolute left-1 right-1 rounded border px-1 py-0.5 text-left shadow-sm overflow-hidden z-[2] ${baseClass}`}
-                                style={style}
-                                title={`${ev.titulo} ${ev.horaInicio}-${ev.horaFin}`}
-                              >
-                                <p className="text-[10px] font-semibold leading-tight truncate">{ev.titulo}</p>
-                                <p className="text-[10px] leading-tight opacity-80 truncate">{ev.horaInicio}-{ev.horaFin}</p>
-                                {ev.subtitulo && <p className="text-[10px] leading-tight opacity-75 truncate">{ev.subtitulo}</p>}
-                              </button>
+                              <div key={ev.id} className="absolute left-1 right-1 z-[2]" style={{ top: `${top}px`, height: `${height}px` }}>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onClickEvento?.(ev);
+                                  }}
+                                  className={`w-full h-full rounded border px-1 py-0.5 text-left shadow-sm overflow-hidden ${baseClass}`}
+                                  style={style}
+                                  title={`${ev.titulo} ${ev.horaInicio}-${ev.horaFin}`}
+                                >
+                                  <p className="text-[10px] font-semibold leading-tight truncate">{ev.titulo}</p>
+                                  <p className="text-[10px] leading-tight opacity-80 truncate">{ev.horaInicio}-{ev.horaFin}</p>
+                                  {ev.subtitulo && <p className="text-[10px] leading-tight opacity-75 truncate">{ev.subtitulo}</p>}
+                                </button>
+                                {onEliminarEvento && ev.tipo === "CLASE" && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onEliminarEvento(ev);
+                                    }}
+                                    className="absolute top-0.5 right-0.5 w-4 h-4 rounded bg-red-600 text-white text-[10px] leading-none"
+                                    title="Eliminar sesión"
+                                  >
+                                    x
+                                  </button>
+                                )}
+                              </div>
                             );
                           })}
                         </div>

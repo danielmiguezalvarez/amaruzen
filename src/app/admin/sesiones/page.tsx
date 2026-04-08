@@ -74,6 +74,7 @@ export default function SesionesPage() {
   const [fichaTitulo, setFichaTitulo] = useState("");
   const [fichaSubtitulo, setFichaSubtitulo] = useState("");
   const [fichaData, setFichaData] = useState<FichaData | null>(null);
+  const [fichaSesionRef, setFichaSesionRef] = useState("");
   const [fichaLoading, setFichaLoading] = useState(false);
   const [moverOpen, setMoverOpen] = useState(false);
   const [alumnoMoverId, setAlumnoMoverId] = useState("");
@@ -180,8 +181,50 @@ export default function SesionesPage() {
     if (res.ok) {
       const data = await res.json();
       setFichaData(data);
+      setFichaSesionRef(sesion.id);
     }
     setFichaLoading(false);
+  }
+
+  async function eliminarSesionActual() {
+    if (!fichaSesionRef) return;
+    if (!confirm("¿Eliminar esta sesión? Esta acción no se puede deshacer.")) return;
+
+    const res = await fetch("/api/admin/sesiones/eliminar", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sesionRef: fichaSesionRef }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || "No se pudo eliminar la sesión");
+      return;
+    }
+
+    setFichaOpen(false);
+    setFichaData(null);
+    setFichaSesionRef("");
+    await cargar(lunes);
+  }
+
+  async function eliminarSesionDesdeEvento(ev: EventoCalendario) {
+    if (ev.tipo !== "CLASE") return;
+    if (!confirm("¿Eliminar esta sesión? Esta acción no se puede deshacer.")) return;
+
+    const res = await fetch("/api/admin/sesiones/eliminar", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sesionRef: ev.id }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || "No se pudo eliminar la sesión");
+      return;
+    }
+
+    await cargar(lunes);
   }
 
   function abrirMoverAlumno(alumnoId: string) {
@@ -345,15 +388,21 @@ export default function SesionesPage() {
             salas={salas}
             eventos={eventos}
             onClickEvento={abrirFicha}
+            onEliminarEvento={eliminarSesionDesdeEvento}
             onClickHueco={onClickHueco}
           />
-          <CalendarioLista lunes={lunes} eventos={eventos} onClickEvento={abrirFicha} />
+          <CalendarioLista
+            lunes={lunes}
+            eventos={eventos}
+            onClickEvento={abrirFicha}
+            onEliminarEvento={eliminarSesionDesdeEvento}
+          />
         </>
       )}
 
       <FichaSesionModal
         abierto={fichaOpen}
-        onClose={() => { setFichaOpen(false); setFichaData(null); }}
+        onClose={() => { setFichaOpen(false); setFichaData(null); setFichaSesionRef(""); }}
         titulo={fichaTitulo}
         subtitulo={fichaSubtitulo}
         ocupados={fichaData?.ocupacion.ocupados}
@@ -362,6 +411,7 @@ export default function SesionesPage() {
         cargando={fichaLoading}
         onMoverAlumno={abrirMoverAlumno}
         onAusenciaAlumno={marcarAusenciaAlumno}
+        onEliminarSesion={eliminarSesionActual}
       />
 
       {moverOpen && (
