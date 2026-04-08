@@ -116,6 +116,16 @@ export default function AlumnosPage() {
     setDetalle(null);
   }
 
+  async function reactivarAlumno(id: string) {
+    if (!confirm("¿Reactivar este alumno?")) return;
+    await fetch(`/api/admin/alumnos/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activo: true }),
+    });
+    await refrescarDetalle(id);
+  }
+
   async function anadirInscripcion(alumnoId: string) {
     if (!claseAnadir || horariosSel.length === 0) return;
     const res = await fetch(`/api/admin/alumnos/${alumnoId}/inscripciones`, {
@@ -407,6 +417,15 @@ export default function AlumnosPage() {
                 className="w-full py-2 border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50"
               >
                 Dar de baja
+              </button>
+            )}
+
+            {!detalle.activo && (
+              <button
+                onClick={() => reactivarAlumno(detalle.id)}
+                className="w-full py-2 border border-emerald-300 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-50"
+              >
+                Reactivar alumno
               </button>
             )}
           </div>

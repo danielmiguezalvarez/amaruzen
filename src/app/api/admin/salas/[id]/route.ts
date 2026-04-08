@@ -7,9 +7,23 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   if (auth.error) return auth.error;
 
   const { nombre, descripcion, aforo, activa, color } = await req.json();
+  const data: {
+    nombre?: string;
+    descripcion?: string | null;
+    aforo?: number;
+    activa?: boolean;
+    color?: string | null;
+  } = {};
+
+  if (typeof nombre === "string") data.nombre = nombre;
+  if (descripcion !== undefined) data.descripcion = descripcion || null;
+  if (aforo !== undefined) data.aforo = Number(aforo);
+  if (typeof activa === "boolean") data.activa = activa;
+  if (color !== undefined) data.color = color || null;
+
   const sala = await prisma.sala.update({
     where: { id: params.id },
-    data: { nombre, descripcion, aforo: Number(aforo), activa, color: color || null },
+    data,
   });
   return NextResponse.json(sala);
 }

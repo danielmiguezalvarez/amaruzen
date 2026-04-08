@@ -7,9 +7,21 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   if (auth.error) return auth.error;
 
   const { nombre, email, telefono, activo } = await req.json();
+  const data: {
+    nombre?: string;
+    email?: string | null;
+    telefono?: string | null;
+    activo?: boolean;
+  } = {};
+
+  if (typeof nombre === "string") data.nombre = nombre;
+  if (email !== undefined) data.email = email || null;
+  if (telefono !== undefined) data.telefono = telefono || null;
+  if (typeof activo === "boolean") data.activo = activo;
+
   const profesor = await prisma.profesor.update({
     where: { id: params.id },
-    data: { nombre, email, telefono, activo },
+    data,
   });
   return NextResponse.json(profesor);
 }

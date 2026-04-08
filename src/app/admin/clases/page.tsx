@@ -19,6 +19,7 @@ type HorarioLite = {
 type Clase = {
   id: string;
   nombre: string;
+  tipoClase: { id: string; nombre: string };
   profesor: Profesor;
   sala: Sala;
   aforo: number;
@@ -63,7 +64,7 @@ export default function ClasesPage() {
 
   // Campos base de la clase
   const [form, setForm] = useState({
-    nombre: "", tipoNombre: "", profesorId: "", salaId: "",
+    nombre: "", tipoNombre: "", tipoClaseId: "", profesorId: "", salaId: "",
     aforo: "", fechaFin: "", color: "",
   });
   // Horarios recurrentes
@@ -86,7 +87,7 @@ export default function ClasesPage() {
 
   function abrirNuevo() {
     setEditando(null);
-    setForm({ nombre: "", tipoNombre: "", profesorId: "", salaId: "", aforo: "", fechaFin: "", color: "" });
+    setForm({ nombre: "", tipoNombre: "", tipoClaseId: "", profesorId: "", salaId: "", aforo: "", fechaFin: "", color: "" });
     setHorarios([]);
     setError("");
     setMensaje("");
@@ -96,7 +97,11 @@ export default function ClasesPage() {
   function abrirEditar(c: Clase) {
     setEditando(c);
     setForm({
-      nombre: c.nombre, tipoNombre: "", profesorId: c.profesor.id, salaId: c.sala.id,
+      nombre: c.nombre,
+      tipoNombre: c.tipoClase?.nombre || "",
+      tipoClaseId: c.tipoClase?.id || "",
+      profesorId: c.profesor.id,
+      salaId: c.sala.id,
       aforo: String(c.aforo),
       fechaFin: c.fechaFin ? new Date(c.fechaFin).toISOString().split("T")[0] : "",
       color: c.color || "",
@@ -194,6 +199,16 @@ export default function ClasesPage() {
     await cargar();
   }
 
+  async function reactivar(id: string) {
+    if (!confirm("¿Reactivar esta clase? Se volverán a generar sus sesiones futuras.")) return;
+    await fetch(`/api/admin/clases/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activa: true }),
+    });
+    await cargar();
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -237,6 +252,8 @@ export default function ClasesPage() {
                         <div>
                           <p className="font-medium text-stone-800">{c.nombre}</p>
                           <p className="text-xs text-stone-400">{c.aforo} plazas · {c.profesor.nombre} · {c.sala.nombre}</p>
+                          <p className="text-xs text-stone-500">Tipo: {c.tipoClase?.nombre || "Sin tipo"}</p>
+                          {!c.profesor.activo && <p className="text-xs text-amber-600">Profesor desactivado</p>}
                         </div>
                       </div>
                     </td>
@@ -261,6 +278,7 @@ export default function ClasesPage() {
                     <td className="px-5 py-3 text-right space-x-2">
                       <button onClick={() => abrirEditar(c)} className="text-stone-500 hover:text-stone-800 text-xs">Editar</button>
                       {c.activa && <button onClick={() => desactivar(c.id)} className="text-red-400 hover:text-red-600 text-xs">Desactivar</button>}
+                      {!c.activa && <button onClick={() => reactivar(c.id)} className="text-emerald-600 hover:text-emerald-700 text-xs">Reactivar</button>}
                     </td>
                   </tr>
                 ))}

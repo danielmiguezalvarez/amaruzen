@@ -18,6 +18,7 @@ export default function ConveniosPage() {
   const [clases, setClases] = useState<Clase[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editando, setEditando] = useState<Convenio | null>(null);
   const [form, setForm] = useState({ claseAId: "", claseBId: "", tipo: "EQUIVALENTE", limiteMensual: "2", requiereAprobacion: false });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -38,8 +39,8 @@ export default function ConveniosPage() {
     e.preventDefault();
     setSaving(true);
     setError("");
-    const res = await fetch("/api/admin/convenios", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+    const res = await fetch(editando ? `/api/admin/convenios/${editando.id}` : "/api/admin/convenios", {
+      method: editando ? "PUT" : "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
     if (!res.ok) {
@@ -58,6 +59,29 @@ export default function ConveniosPage() {
     cargar();
   }
 
+  async function reactivar(id: string) {
+    if (!confirm("¿Reactivar este convenio?")) return;
+    await fetch(`/api/admin/convenios/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activo: true }),
+    });
+    cargar();
+  }
+
+  function abrirEditar(c: Convenio) {
+    setEditando(c);
+    setForm({
+      claseAId: c.claseA.id,
+      claseBId: c.claseB.id,
+      tipo: c.tipo,
+      limiteMensual: String(c.limiteMensual),
+      requiereAprobacion: c.requiereAprobacion,
+    });
+    setError("");
+    setShowForm(true);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -65,7 +89,7 @@ export default function ConveniosPage() {
           <h1 className="text-2xl font-bold text-stone-800">Convenios</h1>
           <p className="text-stone-500 text-sm mt-1">Define qué clases son intercambiables entre sí</p>
         </div>
-        <button onClick={() => { setForm({ claseAId: "", claseBId: "", tipo: "EQUIVALENTE", limiteMensual: "2", requiereAprobacion: false }); setError(""); setShowForm(true); }}
+        <button onClick={() => { setEditando(null); setForm({ claseAId: "", claseBId: "", tipo: "EQUIVALENTE", limiteMensual: "2", requiereAprobacion: false }); setError(""); setShowForm(true); }}
           className="px-4 py-2 bg-stone-800 text-white rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors">
           Nuevo convenio
         </button>
@@ -110,7 +134,9 @@ export default function ConveniosPage() {
                       </span>
                     </td>
                     <td className="px-5 py-3 text-right">
+                      <button onClick={() => abrirEditar(c)} className="text-stone-500 hover:text-stone-800 text-xs mr-2">Editar</button>
                       {c.activo && <button onClick={() => desactivar(c.id)} className="text-red-400 hover:text-red-600 text-xs">Desactivar</button>}
+                      {!c.activo && <button onClick={() => reactivar(c.id)} className="text-emerald-600 hover:text-emerald-700 text-xs">Reactivar</button>}
                     </td>
                   </tr>
                 ))}
@@ -123,7 +149,7 @@ export default function ConveniosPage() {
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-stone-800 mb-5">Nuevo convenio</h2>
+            <h2 className="text-lg font-semibold text-stone-800 mb-5">{editando ? "Editar convenio" : "Nuevo convenio"}</h2>
             {error && <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>}
             <form onSubmit={guardar} className="space-y-4">
               <div>

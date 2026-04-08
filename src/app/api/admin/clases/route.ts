@@ -17,6 +17,37 @@ function horaValida(h: string) {
   return /^\d{2}:\d{2}$/.test(h);
 }
 
+function toMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function overlap(aInicio: string, aFin: string, bInicio: string, bFin: string): boolean {
+  return toMinutes(aInicio) < toMinutes(bFin) && toMinutes(bInicio) < toMinutes(aFin);
+}
+
+async function resolveTipoClaseId(tipoClaseId: string | undefined, tipoNombre: string | undefined, nombreClase: string) {
+  if (tipoClaseId) return tipoClaseId;
+  const nombreTipo = (tipoNombre || nombreClase).trim();
+  const existente = await prisma.tipoClase.findFirst({ where: { nombre: nombreTipo } });
+  if (existente) return existente.id;
+  const tipo = await prisma.tipoClase.create({ data: { nombre: nombreTipo } });
+  return tipo.id;
+}
+
+function validarConflictosInternos(horarios: HorarioPayload[]) {
+  for (let i = 0; i < horarios.length; i++) {
+    for (let j = i + 1; j < horarios.length; j++) {
+      const a = horarios[i];
+      const b = horarios[j];
+      if (a.salaId === b.salaId && a.diaSemana === b.diaSemana && overlap(a.horaInicio, a.horaFin, b.horaInicio, b.horaFin)) {
+        return `Conflicto entre horarios de la misma clase: ${a.diaSemana} ${a.horaInicio}-${a.horaFin} y ${b.horaInicio}-${b.horaFin} en la misma sala`;
+      }
+    }
+  }
+  return null;
+}
+
 export async function GET(req: Request) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
@@ -93,14 +124,32 @@ export async function POST(req: Request) {
     }
   }
 
-  // Resolver el tipoClaseId: usar el pasado directamente, o crear uno nuevo desde tipoNombre, o usar el nombre de la clase como fallback
-  let tipoId = tipoClaseId;
-  if (!tipoId) {
-    const tipo = await prisma.tipoClase.create({
-      data: { nombre: tipoNombre || nombre },
-    });
-    tipoId = tipo.id;
+  const conflictoInterno = validarConflictosInternos(horariosEntrada);
+  if (conflictoInterno) {
+    return NextResponse.json({ error: conflictoInterno }, { status: 409 });
   }
+
+  for (const h of horariosEntrada) {
+    const conflictos = await prisma.horario.findMany({
+      where: {
+        activo: true,
+        fecha: null,
+        salaId: h.salaId,
+        diaSemana: h.diaSemana,
+        clase: { activa: true },
+      },
+      select: { horaInicio: true, horaFin: true },
+    });
+
+    if (conflictos.some((x) => overlap(h.horaInicio, h.horaFin, x.horaInicio, x.horaFin))) {
+      return NextResponse.json(
+        { error: `Conflicto de sala: ya existe otra clase en ${h.diaSemana} ${h.horaInicio}-${h.horaFin}` },
+        { status: 409 }
+      );
+    }
+  }
+
+  const tipoId = await resolveTipoClaseId(tipoClaseId, tipoNombre, nombre);
 
   const clase = await prisma.clase.create({
     data: {

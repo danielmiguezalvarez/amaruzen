@@ -75,6 +75,16 @@ export default function ProfesoresPage() {
     cargar();
   }
 
+  async function reactivar(id: string) {
+    if (!confirm("¿Reactivar este profesor?")) return;
+    await fetch(`/api/admin/profesores/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activo: true }),
+    });
+    cargar();
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -122,6 +132,9 @@ export default function ProfesoresPage() {
                       <button onClick={() => abrirEditar(p)} className="text-stone-500 hover:text-stone-800 text-xs">Editar</button>
                       {p.activo && (
                         <button onClick={() => desactivar(p.id)} className="text-red-400 hover:text-red-600 text-xs">Desactivar</button>
+                      )}
+                      {!p.activo && (
+                        <button onClick={() => reactivar(p.id)} className="text-emerald-600 hover:text-emerald-700 text-xs">Reactivar</button>
                       )}
                     </td>
                   </tr>

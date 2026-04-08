@@ -78,6 +78,16 @@ export default function SalasPage() {
     cargar();
   }
 
+  async function reactivar(id: string) {
+    if (!confirm("¿Reactivar esta sala?")) return;
+    await fetch(`/api/admin/salas/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activa: true }),
+    });
+    cargar();
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -132,6 +142,9 @@ export default function SalasPage() {
                       <button onClick={() => abrirEditar(sala)} className="text-stone-500 hover:text-stone-800 text-xs">Editar</button>
                       {sala.activa && (
                         <button onClick={() => desactivar(sala.id)} className="text-red-400 hover:text-red-600 text-xs">Desactivar</button>
+                      )}
+                      {!sala.activa && (
+                        <button onClick={() => reactivar(sala.id)} className="text-emerald-600 hover:text-emerald-700 text-xs">Reactivar</button>
                       )}
                     </td>
                   </tr>
