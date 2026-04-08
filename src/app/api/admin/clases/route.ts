@@ -2,6 +2,20 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api-auth";
 import { generarSesionesPorRango } from "@/lib/sesiones";
+import type { DiaSemana } from "@prisma/client";
+
+type HorarioPayload = {
+  id?: string | null;
+  diaSemana: DiaSemana;
+  horaInicio: string;
+  horaFin: string;
+  profesorId: string;
+  salaId: string;
+};
+
+function horaValida(h: string) {
+  return /^\d{2}:\d{2}$/.test(h);
+}
 
 export async function GET() {
   const auth = await requireAdmin();
@@ -27,11 +41,46 @@ export async function POST(req: Request) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
 
-  const { nombre, tipoNombre, tipoClaseId, profesorId, salaId, aforo, recurrente, diaSemana, horaInicio, horaFin, fechaFin, color } = await req.json();
+  const {
+    nombre,
+    tipoNombre,
+    tipoClaseId,
+    profesorId,
+    salaId,
+    aforo,
+    diaSemana,
+    horaInicio,
+    horaFin,
+    fechaFin,
+    color,
+    horarios,
+  } = await req.json();
 
-  if (!nombre || !profesorId || !salaId || !aforo || !horaInicio || !horaFin) {
+  if (!nombre || !profesorId || !salaId || !aforo) {
     return NextResponse.json({ error: "Faltan campos obligatorios" }, { status: 400 });
   }
+
+  const horariosEntrada: HorarioPayload[] =
+    Array.isArray(horarios) && horarios.length > 0
+      ? horarios
+      : diaSemana && horaInicio && horaFin
+        ? [{ diaSemana, horaInicio, horaFin, profesorId, salaId }]
+        : [];
+
+  if (horariosEntrada.length === 0) {
+    return NextResponse.json({ error: "Debes añadir al menos un horario" }, { status: 400 });
+  }
+
+  for (const h of horariosEntrada) {
+    if (!h.diaSemana || !h.horaInicio || !h.horaFin || !h.profesorId || !h.salaId) {
+      return NextResponse.json({ error: "Horario inválido: faltan campos" }, { status: 400 });
+    }
+    if (!horaValida(h.horaInicio) || !horaValida(h.horaFin) || h.horaInicio >= h.horaFin) {
+      return NextResponse.json({ error: "Horario inválido: horas incorrectas" }, { status: 400 });
+    }
+  }
+
+  const primerHorario = horariosEntrada[0];
 
   // Resolver el tipoClaseId: usar el pasado directamente, o crear uno nuevo desde tipoNombre, o usar el nombre de la clase como fallback
   let tipoId = tipoClaseId;
@@ -49,40 +98,35 @@ export async function POST(req: Request) {
       profesorId,
       salaId,
       aforo: Number(aforo),
-      recurrente: Boolean(recurrente),
-      diaSemana: recurrente ? diaSemana : null,
-      horaInicio,
-      horaFin,
+      recurrente: true,
+      diaSemana: primerHorario.diaSemana,
+      horaInicio: primerHorario.horaInicio,
+      horaFin: primerHorario.horaFin,
       fechaFin: fechaFin ? new Date(fechaFin) : null,
       color: color || null,
     },
     include: { profesor: true, sala: true, tipoClase: true },
   });
 
-  // Crear el Horario correspondiente solo para clases recurrentes.
-  // Las clases puntuales (recurrente=false) no tienen diaSemana ni fecha fija aquí:
-  // sus sesiones puntuales se crean desde el calendario via POST /api/admin/horarios.
-  if (recurrente && diaSemana) {
-    await prisma.horario.create({
-      data: {
-        claseId: clase.id,
-        profesorId,
-        salaId,
-        diaSemana,
-        fecha: null,
-        horaInicio,
-        horaFin,
-        aforo: Number(aforo),
-        activo: true,
-      },
-    });
+  await prisma.horario.createMany({
+    data: horariosEntrada.map((h) => ({
+      claseId: clase.id,
+      profesorId: h.profesorId,
+      salaId: h.salaId,
+      diaSemana: h.diaSemana,
+      fecha: null,
+      horaInicio: h.horaInicio,
+      horaFin: h.horaFin,
+      aforo: Number(aforo),
+      activo: true,
+    })),
+  });
 
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const hasta = new Date(hoy);
-    hasta.setDate(hasta.getDate() + 84);
-    await generarSesionesPorRango(hoy, hasta);
-  }
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const hasta = new Date(hoy);
+  hasta.setDate(hasta.getDate() + 84);
+  await generarSesionesPorRango(hoy, hasta);
 
   return NextResponse.json(clase, { status: 201 });
 }
