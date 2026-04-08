@@ -59,11 +59,30 @@ export async function POST(req: Request) {
     include: { profesor: true, sala: true, tipoClase: true },
   });
 
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const hasta = new Date(hoy);
-  hasta.setDate(hasta.getDate() + 84);
-  await generarSesionesPorRango(hoy, hasta);
+  // Crear el Horario correspondiente solo para clases recurrentes.
+  // Las clases puntuales (recurrente=false) no tienen diaSemana ni fecha fija aquí:
+  // sus sesiones puntuales se crean desde el calendario via POST /api/admin/horarios.
+  if (recurrente && diaSemana) {
+    await prisma.horario.create({
+      data: {
+        claseId: clase.id,
+        profesorId,
+        salaId,
+        diaSemana,
+        fecha: null,
+        horaInicio,
+        horaFin,
+        aforo: Number(aforo),
+        activo: true,
+      },
+    });
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const hasta = new Date(hoy);
+    hasta.setDate(hasta.getDate() + 84);
+    await generarSesionesPorRango(hoy, hasta);
+  }
 
   return NextResponse.json(clase, { status: 201 });
 }

@@ -267,7 +267,8 @@ ON CONFLICT ("horarioId", "fecha") DO UPDATE SET
   "horaInicio" = EXCLUDED."horaInicio",
   "horaFin" = EXCLUDED."horaFin",
   "aforo" = EXCLUDED."aforo",
-  "cancelada" = EXCLUDED."cancelada",
+  -- Preservar cancelaciones manuales: solo actualizar cancelada si la sesion existente NO estaba cancelada
+  "cancelada" = CASE WHEN "Sesion"."cancelada" = true THEN true ELSE EXCLUDED."cancelada" END,
   "updatedAt" = NOW();
 `);
 }

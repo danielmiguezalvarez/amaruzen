@@ -234,8 +234,10 @@ export default function SesionesPage() {
   const opcionesMover = sesiones
     .filter((s) => {
       if (!fichaData) return false;
+      // Excluir la sesión origen: comparar por sesionId real o por la clave horarioId__fecha
       const origenKey = `${fichaData.sesion.horarioId}__${new Date(fichaData.sesion.fecha).toISOString().slice(0, 10)}`;
-      return s.id !== origenKey && !s.cancelada;
+      const esMismaKey = s.id === origenKey || (s.sesionId !== null && s.sesionId === fichaData.sesion.id);
+      return !esMismaKey && !s.cancelada;
     })
     .map((s) => ({
       id: s.id,

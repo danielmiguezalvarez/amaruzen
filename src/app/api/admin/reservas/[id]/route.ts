@@ -88,16 +88,20 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   });
 
   if (updated.profesional.email) {
-    await sendReservaRespondida({
-      to: updated.profesional.email,
-      nombre: updated.profesional.name || "Profesional",
-      estado,
-      fecha: updated.fecha,
-      sala: updated.sala.nombre,
-      horaInicio: updated.horaInicio,
-      horaFin: updated.horaFin,
-      notas: updated.notas,
-    });
+    try {
+      await sendReservaRespondida({
+        to: updated.profesional.email,
+        nombre: updated.profesional.name || "Profesional",
+        estado,
+        fecha: updated.fecha,
+        sala: updated.sala.nombre,
+        horaInicio: updated.horaInicio,
+        horaFin: updated.horaFin,
+        notas: updated.notas,
+      });
+    } catch {
+      // Ignorar errores de email — la operación principal ya se completó
+    }
   }
 
   return NextResponse.json(updated);
