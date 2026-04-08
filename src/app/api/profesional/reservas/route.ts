@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireProfesional } from "@/lib/api-auth";
-import { normalizarFecha } from "@/lib/sesiones";
-import type { DiaSemana } from "@prisma/client";
+import { generarSesionesPorRango, normalizarFecha } from "@/lib/sesiones";
 
 function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
@@ -71,29 +70,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Solo puedes reservar para clases que impartes" }, { status: 403 });
   }
 
-  // Conflicto con horarios activos del mismo día y sala
-  const diaJs = fechaReserva.getDay();
-  const diaSemana = ["DOMINGO", "LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"][diaJs] as DiaSemana;
+  await generarSesionesPorRango(fechaReserva, fechaReserva);
 
-  const horariosSala = await prisma.horario.findMany({
+  const sesionesSala = await prisma.sesion.findMany({
     where: {
-      activo: true,
       salaId,
-      OR: [
-        { diaSemana, fecha: null },
-        { fecha: fechaReserva },
-      ],
+      fecha: fechaReserva,
+      cancelada: false,
+      clase: { activa: true },
+      horario: { activo: true },
     },
-    include: { clase: true },
+    select: { horaInicio: true, horaFin: true },
   });
 
-  const conflictoClase = horariosSala.some((horario) => {
-    const claseHorario = horario.clase;
-    if (!claseHorario.activa) return false;
-    if (claseHorario.fechaInicio && fechaReserva < normalizarFecha(claseHorario.fechaInicio)) return false;
-    if (claseHorario.fechaFin && fechaReserva > normalizarFecha(claseHorario.fechaFin)) return false;
-    return overlap(horaInicio, horaFin, horario.horaInicio, horario.horaFin);
-  });
+  const conflictoClase = sesionesSala.some((s) => overlap(horaInicio, horaFin, s.horaInicio, s.horaFin));
 
   if (conflictoClase) {
     return NextResponse.json({ error: "La sala está ocupada por una clase en ese horario" }, { status: 409 });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api-auth";
 import { sendReservaRespondida } from "@/lib/email";
+import { generarSesionesPorRango, normalizarFecha } from "@/lib/sesiones";
 
 function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
@@ -34,33 +35,23 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
   if (estado === "APROBADA") {
     // validar conflictos justo antes de aprobar
-    const clasesSala = await prisma.clase.findMany({
+    const fechaReserva = normalizarFecha(reserva.fecha);
+    await generarSesionesPorRango(fechaReserva, fechaReserva);
+
+    const sesionesSala = await prisma.sesion.findMany({
       where: {
-        activa: true,
-        recurrente: true,
         salaId: reserva.salaId,
+        fecha: fechaReserva,
+        cancelada: false,
+        clase: { activa: true },
+        horario: { activo: true },
       },
+      select: { horaInicio: true, horaFin: true },
     });
 
-    const conflictoClase = clasesSala.some((clase) => {
-      if (!clase.diaSemana) return false;
-      const diaReserva = reserva.fecha.getDay();
-      const diaClase = {
-        DOMINGO: 0,
-        LUNES: 1,
-        MARTES: 2,
-        MIERCOLES: 3,
-        JUEVES: 4,
-        VIERNES: 5,
-        SABADO: 6,
-      }[clase.diaSemana];
-
-      if (diaReserva !== diaClase) return false;
-      if (clase.fechaInicio && reserva.fecha < clase.fechaInicio) return false;
-      if (clase.fechaFin && reserva.fecha > clase.fechaFin) return false;
-
-      return overlap(reserva.horaInicio, reserva.horaFin, clase.horaInicio, clase.horaFin);
-    });
+    const conflictoClase = sesionesSala.some((s) =>
+      overlap(reserva.horaInicio, reserva.horaFin, s.horaInicio, s.horaFin)
+    );
 
     if (conflictoClase) {
       return NextResponse.json({ error: "Conflicto: la sala está ocupada por una clase" }, { status: 409 });

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api-auth";
-import { normalizarFecha } from "@/lib/sesiones";
-import type { DiaSemana } from "@prisma/client";
+import { generarSesionesPorRango, normalizarFecha } from "@/lib/sesiones";
 
 function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
@@ -44,23 +43,20 @@ export async function POST(req: Request) {
 
   const profId = profesorId || clase.profesorId;
 
-  const conflictosHorarios = await prisma.horario.findMany({
+  await generarSesionesPorRango(fechaNorm, fechaNorm);
+
+  const conflictosSesiones = await prisma.sesion.findMany({
     where: {
-      activo: true,
       salaId,
-      OR: [
-        { fecha: fechaNorm },
-        { fecha: null, diaSemana: DIA_FROM_JS[fechaNorm.getDay()] },
-      ],
+      fecha: fechaNorm,
       clase: { activa: true },
+      horario: { activo: true },
     },
-    include: { clase: true },
+    select: { horaInicio: true, horaFin: true },
   });
 
-  for (const h of conflictosHorarios) {
-    if (h.clase.fechaInicio && fechaNorm < normalizarFecha(h.clase.fechaInicio)) continue;
-    if (h.clase.fechaFin && fechaNorm > normalizarFecha(h.clase.fechaFin)) continue;
-    if (overlap(horaInicio, horaFin, h.horaInicio, h.horaFin)) {
+  for (const s of conflictosSesiones) {
+    if (overlap(horaInicio, horaFin, s.horaInicio, s.horaFin)) {
       return NextResponse.json({ error: "La sala ya está ocupada en ese tramo" }, { status: 409 });
     }
   }
@@ -92,6 +88,7 @@ export async function POST(req: Request) {
     },
   });
 
+  await generarSesionesPorRango(fechaNorm, fechaNorm);
+
   return NextResponse.json(horario, { status: 201 });
 }
-const DIA_FROM_JS: DiaSemana[] = ["DOMINGO", "LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"];
