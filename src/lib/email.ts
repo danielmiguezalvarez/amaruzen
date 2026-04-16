@@ -129,3 +129,63 @@ export async function sendNotificacionAdmin({
     `,
   });
 }
+
+export async function sendInvitacionAcceso({
+  to,
+  nombre,
+  enlace,
+  rol,
+}: {
+  to: string;
+  nombre: string;
+  enlace: string;
+  rol: "ALUMNO" | "PROFESIONAL";
+}) {
+  if (!process.env.RESEND_API_KEY) return;
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const destino = rol === "PROFESIONAL" ? "panel profesional" : "panel de alumno";
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: "Activa tu acceso a Amaruzen",
+    html: `
+      <p>Hola ${nombre},</p>
+      <p>El centro ha creado tu cuenta en Amaruzen. Para activar el acceso a tu ${destino}, define tu contraseña desde este enlace:</p>
+      <p><a href="${enlace}">${enlace}</a></p>
+      <p>Este enlace caduca en 48 horas.</p>
+      <p>Equipo Amaruzen</p>
+    `,
+  });
+}
+
+export async function sendSolicitudAltaAdmin({
+  to,
+  nombre,
+  email,
+  telefono,
+  tipo,
+  mensaje,
+}: {
+  to: string;
+  nombre: string;
+  email: string;
+  telefono?: string;
+  tipo: "ALUMNO" | "PROFESIONAL";
+  mensaje?: string;
+}) {
+  if (!process.env.RESEND_API_KEY) return;
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `Nueva solicitud de alta (${tipo.toLowerCase()})`,
+    html: `
+      <p>Se recibió una nueva solicitud de alta.</p>
+      <p><strong>Nombre:</strong> ${nombre}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Teléfono:</strong> ${telefono || "No indicado"}</p>
+      <p><strong>Tipo:</strong> ${tipo}</p>
+      <p><strong>Mensaje:</strong> ${mensaje || "Sin mensaje"}</p>
+    `,
+  });
+}

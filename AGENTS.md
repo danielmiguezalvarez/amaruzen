@@ -80,6 +80,11 @@ If you add a test runner in the future, define:
   - `requireAdmin()`
   - `requireProfesional()`
 - JWT callback uses `roleChecked` flag to avoid querying the DB for role on every request.
+- Access model:
+  - `User.password = null` means user exists but has no app access yet.
+  - Access activation is invitation-based (`InvitacionAcceso`) via `/activar-cuenta`.
+  - Public direct registration endpoint is disabled; `/registro` is a request form only.
+  - Profesores are business entities in `Profesor` and can be linked 1:1 to `User` via `Profesor.userId`.
 
 ## Calendar Architecture (Materialized Sessions)
 

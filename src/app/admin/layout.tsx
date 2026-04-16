@@ -34,7 +34,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               {session?.user?.name || session?.user?.email}
             </span>
             <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={async () => {
+                await signOut({ redirect: false });
+                window.location.assign("/login");
+              }}
               className="text-sm text-stone-300 hover:text-white transition-colors"
             >
               Salir

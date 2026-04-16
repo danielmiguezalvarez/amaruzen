@@ -9,7 +9,12 @@ export async function GET() {
 
   const alumnos = await prisma.user.findMany({
     where: { role: "ALUMNO" },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      activo: true,
+      password: true,
       inscripciones: {
         where: { activa: true },
         include: {
@@ -30,7 +35,12 @@ export async function GET() {
     },
     orderBy: { name: "asc" },
   });
-  return NextResponse.json(alumnos);
+  return NextResponse.json(
+    alumnos.map(({ password, ...a }) => ({
+      ...a,
+      accesoActivo: Boolean(password),
+    }))
+  );
 }
 
 export async function POST(req: Request) {

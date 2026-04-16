@@ -43,7 +43,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {session?.user?.name || session?.user?.email}
             </span>
             <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={async () => {
+                await signOut({ redirect: false });
+                window.location.assign("/login");
+              }}
               className="text-sm text-stone-600 hover:text-stone-900 transition-colors"
             >
               Salir

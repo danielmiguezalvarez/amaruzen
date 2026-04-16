@@ -107,6 +107,9 @@ model User {
   reservas      Reserva[]
   ausencias     Ausencia[] @relation("AusenciaAlumno")
   ausenciasCreadas Ausencia[] @relation("AusenciaCreador")
+  profesor      Profesor?
+  invitacionesAcceso InvitacionAcceso[] @relation("InvitacionAccesoUser")
+  invitacionesCreadas InvitacionAcceso[] @relation("InvitacionAccesoCreador")
 }
 
 model Sala {
@@ -130,13 +133,36 @@ model Profesor {
   nombre    String
   email     String?  @unique
   telefono  String?
+  userId    String?  @unique
   activo    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   horarios  Horario[]
   clases    Clase[]
   sesiones  Sesion[]
+  invitacionesAcceso InvitacionAcceso[]
+}
+
+model InvitacionAcceso {
+  id          String    @id @default(cuid())
+  email       String
+  role        Role
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  userId      String?
+  profesorId  String?
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  user        User?     @relation("InvitacionAccesoUser", fields: [userId], references: [id], onDelete: SetNull)
+  profesor    Profesor? @relation(fields: [profesorId], references: [id], onDelete: SetNull)
+  createdBy   User      @relation("InvitacionAccesoCreador", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([email, role, usedAt])
+  @@index([expiresAt])
 }
 
 model TipoClase {

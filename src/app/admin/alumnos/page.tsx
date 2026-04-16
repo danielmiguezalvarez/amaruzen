@@ -24,6 +24,7 @@ type Alumno = {
   name: string | null;
   email: string;
   activo: boolean;
+  accesoActivo?: boolean;
   inscripciones: Inscripcion[];
 };
 
@@ -126,6 +127,17 @@ export default function AlumnosPage() {
     await refrescarDetalle(id);
   }
 
+  async function invitarAlumno(id: string) {
+    const res = await fetch(`/api/admin/alumnos/${id}/invitar`, { method: "POST" });
+    if (!res.ok) {
+      const d = await res.json();
+      alert(d.error || "No se pudo enviar invitación");
+      return;
+    }
+    alert("Invitación enviada por email");
+    await refrescarDetalle(id);
+  }
+
   async function anadirInscripcion(alumnoId: string) {
     if (!claseAnadir || horariosSel.length === 0) return;
     const res = await fetch(`/api/admin/alumnos/${alumnoId}/inscripciones`, {
@@ -201,6 +213,7 @@ export default function AlumnosPage() {
                   <th className="text-left px-5 py-3 font-medium text-stone-600">Alumno</th>
                   <th className="text-left px-5 py-3 font-medium text-stone-600 hidden sm:table-cell">Email</th>
                   <th className="text-left px-5 py-3 font-medium text-stone-600">Clases</th>
+                  <th className="text-left px-5 py-3 font-medium text-stone-600 hidden sm:table-cell">Acceso</th>
                   <th className="text-left px-5 py-3 font-medium text-stone-600">Estado</th>
                   <th className="px-5 py-3" />
                 </tr>
@@ -211,6 +224,11 @@ export default function AlumnosPage() {
                     <td className="px-5 py-3 font-medium text-stone-800">{a.name || "Sin nombre"}</td>
                     <td className="px-5 py-3 text-stone-500 hidden sm:table-cell">{a.email}</td>
                     <td className="px-5 py-3 text-stone-600">{a.inscripciones.length}</td>
+                    <td className="px-5 py-3 hidden sm:table-cell">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${a.accesoActivo ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                        {a.accesoActivo ? "Con acceso" : "Sin acceso"}
+                      </span>
+                    </td>
                     <td className="px-5 py-3">
                       <span
                         className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -264,7 +282,7 @@ export default function AlumnosPage() {
                   type="password"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="Dejar vacío si usará Google"
+                  placeholder="Dejar vacío para definirla más tarde"
                   className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
                 />
               </div>
@@ -428,6 +446,13 @@ export default function AlumnosPage() {
                 Reactivar alumno
               </button>
             )}
+
+            <button
+              onClick={() => invitarAlumno(detalle.id)}
+              className="w-full mt-2 py-2 border border-blue-300 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-50"
+            >
+              Enviar invitación de acceso
+            </button>
           </div>
         </div>
       )}

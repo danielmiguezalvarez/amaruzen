@@ -59,12 +59,16 @@ export async function POST(req: Request) {
     where: { id: claseId },
     include: {
       horarios: {
-        include: { profesor: true },
+        include: { profesor: { select: { userId: true, email: true } } },
       },
     },
   });
   const asignadaAlProfesional = Boolean(
-    clase?.horarios.some((h) => h.profesor.email && h.profesor.email === session.user.email)
+    clase?.horarios.some(
+      (h) =>
+        (h.profesor.userId && h.profesor.userId === session.user.id) ||
+        (h.profesor.email && h.profesor.email === session.user.email)
+    )
   );
   if (!clase || !asignadaAlProfesional) {
     return NextResponse.json({ error: "Solo puedes reservar para clases que impartes" }, { status: 403 });

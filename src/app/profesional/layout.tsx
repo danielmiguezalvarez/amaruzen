@@ -23,7 +23,13 @@ export default function ProfesionalLayout({ children }: { children: React.ReactN
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-stone-500 hidden sm:block">{session?.user?.name || session?.user?.email}</span>
-            <button onClick={() => signOut({ callbackUrl: "/login" })} className="text-sm text-stone-600 hover:text-stone-900">
+            <button
+              onClick={async () => {
+                await signOut({ redirect: false });
+                window.location.assign("/login");
+              }}
+              className="text-sm text-stone-600 hover:text-stone-900"
+            >
               Salir
             </button>
           </div>
