@@ -10,9 +10,41 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
   // Si se da de baja, desactivar todas sus inscripciones
   if (activo === false) {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const inscripciones = await prisma.inscripcion.findMany({
+      where: { userId: params.id },
+      select: { id: true },
+    });
+
     await prisma.inscripcion.updateMany({
       where: { userId: params.id },
       data: { activa: false },
+    });
+
+    await prisma.inscripcionHorario.updateMany({
+      where: { inscripcionId: { in: inscripciones.map((i) => i.id) } },
+      data: { activa: false },
+    });
+
+    await prisma.ausencia.deleteMany({
+      where: {
+        userId: params.id,
+        fecha: { gte: hoy },
+      },
+    });
+
+    await prisma.cambio.updateMany({
+      where: {
+        userId: params.id,
+        estado: { in: ["PENDIENTE", "APROBADO"] },
+        OR: [
+          { sesionOrigen: { fecha: { gte: hoy } } },
+          { sesionDestino: { fecha: { gte: hoy } } },
+        ],
+      },
+      data: { estado: "RECHAZADO" },
     });
   }
 

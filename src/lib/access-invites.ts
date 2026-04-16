@@ -28,6 +28,10 @@ export async function crearInvitacionAcceso({
   nombre: string;
   role: "ALUMNO" | "PROFESIONAL";
 }) {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY no configurada");
+  }
+
   const token = crypto.randomBytes(32).toString("hex");
   const tokenHash = hashToken(token);
   const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);

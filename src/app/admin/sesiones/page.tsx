@@ -63,6 +63,12 @@ type ProfesorLite = {
   activo: boolean;
 };
 
+type ConvenioLite = {
+  activa: boolean;
+  claseA: { id: string };
+  claseB: { id: string };
+};
+
 export default function SesionesPage() {
   const [lunes, setLunes] = useState<Date>(() => getLunesLocal(new Date()));
   const [loading, setLoading] = useState(true);
@@ -85,6 +91,7 @@ export default function SesionesPage() {
   const [puntualOpen, setPuntualOpen] = useState(false);
   const [clasesLite, setClasesLite] = useState<ClaseLite[]>([]);
   const [profesoresLite, setProfesoresLite] = useState<ProfesorLite[]>([]);
+  const [conveniosLite, setConveniosLite] = useState<ConvenioLite[]>([]);
   const [modoIndependiente, setModoIndependiente] = useState(false);
   const [puntualForm, setPuntualForm] = useState({
     claseId: "",
@@ -127,6 +134,15 @@ export default function SesionesPage() {
         setClasesLite([]);
         setProfesoresLite([]);
       });
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/admin/convenios")
+      .then((r) => r.json())
+      .then((data) => {
+        setConveniosLite((data || []).filter((c: ConvenioLite) => c.activa));
+      })
+      .catch(() => setConveniosLite([]));
   }, []);
 
   const eventos: EventoCalendario[] = useMemo(() => {
@@ -278,13 +294,26 @@ export default function SesionesPage() {
     setFichaData(null);
   }
 
+  const clasesConConvenio = useMemo(() => {
+    if (!fichaData) return new Set<string>();
+    const origenClaseId = fichaData.sesion.claseId;
+    const set = new Set<string>();
+    for (const c of conveniosLite) {
+      if (!c.activa) continue;
+      if (c.claseA.id === origenClaseId) set.add(c.claseB.id);
+      if (c.claseB.id === origenClaseId) set.add(c.claseA.id);
+    }
+    return set;
+  }, [conveniosLite, fichaData]);
+
   const opcionesMover = sesiones
     .filter((s) => {
       if (!fichaData) return false;
       // Excluir la sesión origen: comparar por sesionId real o por la clave horarioId__fecha
       const origenKey = `${fichaData.sesion.horarioId}__${new Date(fichaData.sesion.fecha).toISOString().slice(0, 10)}`;
       const esMismaKey = s.id === origenKey || (s.sesionId !== null && s.sesionId === fichaData.sesion.id);
-      return !esMismaKey && !s.cancelada;
+      if (esMismaKey || s.cancelada) return false;
+      return clasesConConvenio.has(s.claseId);
     })
     .map((s) => ({
       id: s.id,
@@ -431,6 +460,9 @@ export default function SesionesPage() {
                     <option key={o.id} value={o.id}>{o.label}</option>
                   ))}
                 </select>
+                {opcionesMover.length === 0 && (
+                  <p className="text-xs text-amber-700 mt-1">No hay sesiones de destino con convenio activo.</p>
+                )}
               </div>
               <label className="flex items-center gap-2 text-sm text-stone-700">
                 <input

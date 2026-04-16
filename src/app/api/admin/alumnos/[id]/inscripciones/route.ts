@@ -20,12 +20,55 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return NextResponse.json({ error: "Faltan datos de inscripción" }, { status: 400 });
   }
 
+  const alumno = await prisma.user.findUnique({
+    where: { id: params.id },
+    select: { id: true, activo: true, role: true },
+  });
+  if (!alumno || alumno.role !== "ALUMNO") {
+    return NextResponse.json({ error: "Alumno no encontrado" }, { status: 404 });
+  }
+  if (!alumno.activo) {
+    return NextResponse.json({ error: "No se puede inscribir un alumno de baja" }, { status: 409 });
+  }
+
+  const numClasesNum = Number(numClases) || horarioIds.length;
+  if (horarioIds.length > numClasesNum) {
+    return NextResponse.json(
+      { error: "No puedes asignar más horarios que clases contratadas" },
+      { status: 409 }
+    );
+  }
+
   const horarios = await prisma.horario.findMany({
     where: { id: { in: horarioIds }, claseId, activo: true },
     include: { clase: true },
   });
   if (horarios.length !== horarioIds.length) {
     return NextResponse.json({ error: "Algún horario no existe o no pertenece a la clase" }, { status: 404 });
+  }
+
+  for (const h of horarios) {
+    const ocupados = await prisma.inscripcionHorario.count({
+      where: {
+        horarioId: h.id,
+        activa: true,
+        inscripcion: {
+          activa: true,
+          user: { activo: true },
+          userId: { not: params.id },
+        },
+      },
+    });
+    const aforoMax = h.aforo || h.clase.aforo;
+    if (ocupados + 1 > aforoMax) {
+      const etiqueta = h.fecha
+        ? `${h.fecha.toISOString().slice(0, 10)} ${h.horaInicio}-${h.horaFin}`
+        : `${h.diaSemana || ""} ${h.horaInicio}-${h.horaFin}`;
+      return NextResponse.json(
+        { error: `Aforo completo en el horario ${etiqueta}` },
+        { status: 409 }
+      );
+    }
   }
 
   const seleccionadosPorDia = new Map<string, Array<{ inicio: string; fin: string }>>();
@@ -44,13 +87,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     where: { userId_claseId: { userId: params.id, claseId } },
     update: {
       activa: true,
-      numClases: Number(numClases) || horarioIds.length,
+      numClases: numClasesNum,
     },
     create: {
       userId: params.id,
       claseId,
       activa: true,
-      numClases: Number(numClases) || horarioIds.length,
+      numClases: numClasesNum,
     },
   });
 

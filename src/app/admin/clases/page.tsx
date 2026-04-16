@@ -73,6 +73,12 @@ export default function ClasesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
+  const [horarioDetalleOpen, setHorarioDetalleOpen] = useState(false);
+  const [horarioDetalleLoading, setHorarioDetalleLoading] = useState(false);
+  const [horarioDetalle, setHorarioDetalle] = useState<{
+    horario: { clase: string; sala: string; diaSemana: string | null; horaInicio: string; horaFin: string; aforo: number };
+    alumnos: Array<{ id: string; name: string | null; email: string }>;
+  } | null>(null);
 
   async function cargar() {
     setLoading(true);
@@ -209,6 +215,22 @@ export default function ClasesPage() {
     await cargar();
   }
 
+  async function verAlumnosHorario(horarioId: string) {
+    setHorarioDetalleLoading(true);
+    setHorarioDetalleOpen(true);
+    const res = await fetch(`/api/admin/horarios/${horarioId}/alumnos`);
+    if (!res.ok) {
+      const d = await res.json();
+      setHorarioDetalle(null);
+      setHorarioDetalleLoading(false);
+      alert(d.error || "No se pudo cargar el horario");
+      return;
+    }
+    const data = await res.json();
+    setHorarioDetalle(data);
+    setHorarioDetalleLoading(false);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -263,9 +285,14 @@ export default function ClasesPage() {
                       ) : (
                         <div className="space-y-0.5">
                           {c.horarios.map((h) => (
-                            <div key={h.id} className="text-xs">
+                            <button
+                              key={h.id}
+                              type="button"
+                              onClick={() => verAlumnosHorario(h.id)}
+                              className="text-xs hover:underline text-left"
+                            >
                               {h.diaSemana ? DIAS_ES[h.diaSemana] : "Puntual"} {h.horaInicio}–{h.horaFin}
-                            </div>
+                            </button>
                           ))}
                         </div>
                       )}
@@ -449,6 +476,46 @@ export default function ClasesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {horarioDetalleOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-stone-800">Alumnos por horario</h2>
+              <button onClick={() => setHorarioDetalleOpen(false)} className="text-stone-400 hover:text-stone-600 text-xl leading-none">&times;</button>
+            </div>
+
+            {horarioDetalleLoading ? (
+              <p className="text-sm text-stone-400">Cargando...</p>
+            ) : !horarioDetalle ? (
+              <p className="text-sm text-stone-400">No se pudo cargar la información.</p>
+            ) : (
+              <>
+                <div className="bg-stone-50 rounded-lg p-3 mb-4">
+                  <p className="text-sm font-semibold text-stone-800">{horarioDetalle.horario.clase}</p>
+                  <p className="text-xs text-stone-500 mt-1">
+                    {horarioDetalle.horario.diaSemana ? DIAS_ES[horarioDetalle.horario.diaSemana] : "Puntual"} · {horarioDetalle.horario.horaInicio}-{horarioDetalle.horario.horaFin} · {horarioDetalle.horario.sala}
+                  </p>
+                  <p className="text-xs text-stone-500 mt-1">{horarioDetalle.alumnos.length}/{horarioDetalle.horario.aforo} ocupadas</p>
+                </div>
+
+                {horarioDetalle.alumnos.length === 0 ? (
+                  <p className="text-sm text-stone-400">No hay alumnos asignados a este horario.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {horarioDetalle.alumnos.map((a) => (
+                      <li key={a.id} className="bg-stone-50 rounded-lg px-3 py-2">
+                        <p className="text-sm font-medium text-stone-800">{a.name || "Sin nombre"}</p>
+                        <p className="text-xs text-stone-500">{a.email}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}

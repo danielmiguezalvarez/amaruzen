@@ -20,6 +20,7 @@ export default function ProfesoresPage() {
   const [form, setForm] = useState({ nombre: "", email: "", telefono: "", password: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   async function cargar() {
     const res = await fetch("/api/admin/profesores");
@@ -33,6 +34,7 @@ export default function ProfesoresPage() {
   function abrirNuevo() {
     setEditando(null);
     setForm({ nombre: "", email: "", telefono: "", password: "" });
+    setShowPassword(false);
     setError("");
     setShowForm(true);
   }
@@ -40,6 +42,7 @@ export default function ProfesoresPage() {
   function abrirEditar(p: Profesor) {
     setEditando(p);
     setForm({ nombre: p.nombre, email: p.email || "", telefono: p.telefono || "", password: "" });
+    setShowPassword(false);
     setError("");
     setShowForm(true);
   }
@@ -73,7 +76,15 @@ export default function ProfesoresPage() {
 
   async function desactivar(id: string) {
     if (!confirm("¿Desactivar este profesor?")) return;
-    await fetch(`/api/admin/profesores/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/admin/profesores/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json();
+      const clases = Array.isArray(data.clases) && data.clases.length > 0
+        ? `\nClases activas: ${data.clases.join(", ")}`
+        : "";
+      alert((data.error || "No se pudo desactivar") + clases);
+      return;
+    }
     cargar();
   }
 
@@ -149,7 +160,14 @@ export default function ProfesoresPage() {
                     </td>
                     <td className="px-5 py-3 text-right space-x-2">
                       <button onClick={() => abrirEditar(p)} className="text-stone-500 hover:text-stone-800 text-xs">Editar</button>
-                      <button onClick={() => invitar(p.id)} className="text-blue-600 hover:text-blue-700 text-xs">Invitar</button>
+                      <button
+                        onClick={() => invitar(p.id)}
+                        disabled={!p.email}
+                        title={!p.email ? "Añade un email para enviar invitación" : "Enviar invitación"}
+                        className="text-blue-600 hover:text-blue-700 text-xs disabled:text-stone-300 disabled:cursor-not-allowed"
+                      >
+                        Invitar
+                      </button>
                       {p.activo && (
                         <button onClick={() => desactivar(p.id)} className="text-red-400 hover:text-red-600 text-xs">Desactivar</button>
                       )}
@@ -203,13 +221,22 @@ export default function ProfesoresPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-stone-700 mb-1">Contraseña inicial (opcional)</label>
-                <input
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="Si queda vacío, activará por invitación"
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder="Si queda vacío, activará por invitación"
+                    className="w-full px-3 py-2 pr-20 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-stone-500 hover:text-stone-700"
+                  >
+                    {showPassword ? "Ocultar" : "Mostrar"}
+                  </button>
+                </div>
               </div>
               <div className="flex gap-3 pt-2">
                 <button

@@ -290,6 +290,59 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Sesión destino no encontrada" }, { status: 404 });
   }
 
+  const convenio = await prisma.convenio.findFirst({
+    where: {
+      activo: true,
+      OR: [
+        { claseAId: sesionOrigen.claseId, claseBId: sesionDestino.claseId },
+        { claseAId: sesionDestino.claseId, claseBId: sesionOrigen.claseId },
+      ],
+    },
+    select: { id: true },
+  });
+
+  if (!convenio) {
+    return NextResponse.json(
+      { error: "No existe convenio activo entre la clase origen y la clase destino" },
+      { status: 409 }
+    );
+  }
+
+  const yaEnDestino = await prisma.inscripcionHorario.count({
+    where: {
+      activa: true,
+      horarioId: sesionDestino.horarioId,
+      inscripcion: {
+        userId,
+        activa: true,
+      },
+    },
+  });
+
+  if (yaEnDestino > 0) {
+    return NextResponse.json(
+      { error: "El alumno ya está asignado a ese horario de destino" },
+      { status: 409 }
+    );
+  }
+
+  const cambioDuplicado = await prisma.cambio.findFirst({
+    where: {
+      userId,
+      sesionOrigenId: sesionOrigen.id,
+      estado: { in: ["PENDIENTE", "APROBADO"] },
+      sesionDestino: { claseId: sesionDestino.claseId },
+    },
+    select: { id: true },
+  });
+
+  if (cambioDuplicado) {
+    return NextResponse.json(
+      { error: "Ese alumno ya tiene un cambio a esa misma clase" },
+      { status: 409 }
+    );
+  }
+
   if (permanente) {
     const inscripcionOrigen = await prisma.inscripcion.findFirst({
       where: { userId, claseId: sesionOrigen.claseId, activa: true },
@@ -332,7 +385,7 @@ export async function POST(req: Request) {
       userId,
       sesionOrigenId: sesionOrigen.id,
       sesionDestinoId: sesionDestino.id,
-      convenioId: convenioId || null,
+      convenioId: convenioId || convenio.id,
       estado: "APROBADO",
     },
   });

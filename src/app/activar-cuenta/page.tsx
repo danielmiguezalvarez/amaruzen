@@ -10,6 +10,7 @@ function ActivarCuentaForm() {
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -55,19 +56,28 @@ function ActivarCuentaForm() {
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-stone-700 mb-1">Contraseña</label>
-            <input
-              type="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm"
-            />
+            <div className="relative">
+              <input
+                type={showPasswords ? "text" : "password"}
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 pr-20 border border-stone-300 rounded-lg text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPasswords((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-stone-500 hover:text-stone-700"
+              >
+                {showPasswords ? "Ocultar" : "Mostrar"}
+              </button>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-stone-700 mb-1">Confirmar contraseña</label>
             <input
-              type="password"
+              type={showPasswords ? "text" : "password"}
               required
               minLength={8}
               value={confirm}

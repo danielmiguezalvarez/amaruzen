@@ -25,13 +25,15 @@ export async function POST(req: Request) {
   if (auth.error) return auth.error;
 
   const { nombre, email, telefono, password } = await req.json();
+  const emailNorm = typeof email === "string" ? email.trim().toLowerCase() : "";
+  const emailFinal = emailNorm || null;
   if (!nombre) {
     return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
   }
 
   let userId: string | null = null;
-  if (email) {
-    const existe = await prisma.user.findUnique({ where: { email } });
+  if (emailFinal) {
+    const existe = await prisma.user.findUnique({ where: { email: emailFinal } });
     if (existe && existe.role !== "PROFESIONAL") {
       return NextResponse.json({ error: "Ya existe un usuario con ese email y otro rol" }, { status: 409 });
     }
@@ -46,7 +48,7 @@ export async function POST(req: Request) {
       const user = await prisma.user.create({
         data: {
           name: nombre,
-          email,
+          email: emailFinal,
           password: hashed,
           role: "PROFESIONAL",
           activo: true,
@@ -57,7 +59,7 @@ export async function POST(req: Request) {
   }
 
   const profesor = await prisma.profesor.create({
-    data: { nombre, email, telefono, userId: userId || undefined },
+    data: { nombre, email: emailFinal, telefono, userId: userId || undefined },
   });
   return NextResponse.json(profesor, { status: 201 });
 }

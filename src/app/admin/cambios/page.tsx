@@ -22,6 +22,9 @@ export default function CambiosPage() {
   const [cambios, setCambios] = useState<Cambio[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<"TODOS" | "PENDIENTE" | "APROBADO" | "RECHAZADO">("PENDIENTE");
+  const [query, setQuery] = useState("");
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
 
   async function cargar() {
     const data = await fetch("/api/admin/cambios").then((r) => r.json());
@@ -31,7 +34,34 @@ export default function CambiosPage() {
 
   useEffect(() => { cargar(); }, []);
 
-  const cambiosFiltrados = filtro === "TODOS" ? cambios : cambios.filter((c) => c.estado === filtro);
+  const cambiosFiltrados = cambios.filter((c) => {
+    if (filtro !== "TODOS" && c.estado !== filtro) return false;
+
+    const q = query.trim().toLowerCase();
+    if (q) {
+      const texto = [
+        c.user.name || "",
+        c.user.email,
+        c.sesionOrigen.clase.nombre,
+        c.sesionDestino.clase.nombre,
+      ].join(" ").toLowerCase();
+      if (!texto.includes(q)) return false;
+    }
+
+    const fechaSolicitud = new Date(c.createdAt);
+    if (desde) {
+      const d = new Date(desde);
+      d.setHours(0, 0, 0, 0);
+      if (fechaSolicitud < d) return false;
+    }
+    if (hasta) {
+      const h = new Date(hasta);
+      h.setHours(23, 59, 59, 999);
+      if (fechaSolicitud > h) return false;
+    }
+
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -53,6 +83,27 @@ export default function CambiosPage() {
             )}
           </button>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar por nombre, email o clase..."
+          className="px-3 py-2 border border-stone-300 rounded-lg text-sm"
+        />
+        <input
+          type="date"
+          value={desde}
+          onChange={(e) => setDesde(e.target.value)}
+          className="px-3 py-2 border border-stone-300 rounded-lg text-sm"
+        />
+        <input
+          type="date"
+          value={hasta}
+          onChange={(e) => setHasta(e.target.value)}
+          className="px-3 py-2 border border-stone-300 rounded-lg text-sm"
+        />
       </div>
 
       {loading ? <p className="text-stone-400 text-sm">Cargando...</p> : (

@@ -78,7 +78,11 @@ function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onEliminarEvento
                     const eventosSala = eventosByDiaSala[key] || [];
 
                     return (
-                      <div key={sala.id} className="relative border-r border-stone-100 last:border-r-0">
+                      <div
+                        key={sala.id}
+                        className="relative border-r border-stone-100 last:border-r-0"
+                        style={sala.color ? { backgroundColor: `${sala.color}10` } : undefined}
+                      >
                         {/* Sala header */}
                         <div
                           className="sticky top-0 z-[1] bg-stone-50/90 backdrop-blur border-b border-stone-100 px-1 py-1 text-[10px] text-stone-500 text-center truncate"
@@ -102,7 +106,11 @@ function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onEliminarEvento
                             <div
                               key={h}
                               className="absolute left-0 right-0 border-b border-stone-100 pointer-events-none"
-                              style={{ top: `${(h - START_HOUR) * PX_PER_HOUR}px`, height: `${PX_PER_HOUR}px` }}
+                              style={{
+                                top: `${(h - START_HOUR) * PX_PER_HOUR}px`,
+                                height: `${PX_PER_HOUR}px`,
+                                ...(sala.color ? { borderBottomColor: `${sala.color}30` } : {}),
+                              }}
                             />
                           ))}
 

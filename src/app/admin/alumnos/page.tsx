@@ -62,6 +62,7 @@ export default function AlumnosPage() {
   const [form, setForm] = useState({ nombre: "", email: "", password: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [claseAnadir, setClaseAnadir] = useState("");
   const [numClases, setNumClases] = useState("1");
@@ -140,6 +141,10 @@ export default function AlumnosPage() {
 
   async function anadirInscripcion(alumnoId: string) {
     if (!claseAnadir || horariosSel.length === 0) return;
+    if (horariosSel.length > (Number(numClases) || 0)) {
+      alert("No puedes seleccionar más horarios que clases contratadas");
+      return;
+    }
     const res = await fetch(`/api/admin/alumnos/${alumnoId}/inscripciones`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -191,6 +196,7 @@ export default function AlumnosPage() {
         <button
           onClick={() => {
             setForm({ nombre: "", email: "", password: "" });
+            setShowPassword(false);
             setError("");
             setShowForm(true);
           }}
@@ -278,13 +284,22 @@ export default function AlumnosPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-stone-700 mb-1">Contraseña (opcional)</label>
-                <input
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="Dejar vacío para definirla más tarde"
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder="Dejar vacío para definirla más tarde"
+                    className="w-full px-3 py-2 pr-20 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-stone-500 hover:text-stone-700"
+                  >
+                    {showPassword ? "Ocultar" : "Mostrar"}
+                  </button>
+                </div>
               </div>
               <div className="flex gap-3 pt-2">
                 <button
@@ -394,6 +409,9 @@ export default function AlumnosPage() {
                 {claseSeleccionada && (
                   <div className="mb-3">
                     <p className="text-xs font-medium text-stone-600 mb-1">Selecciona horarios</p>
+                    {horariosSel.length > (Number(numClases) || 0) && (
+                      <p className="text-xs text-red-600 mb-2">Has seleccionado más horarios que clases contratadas.</p>
+                    )}
                     <div className="space-y-1 max-h-44 overflow-auto border border-stone-100 rounded p-2">
                       {claseSeleccionada.horarios.length === 0 ? (
                         <p className="text-xs text-stone-400">Esta clase aún no tiene horarios</p>

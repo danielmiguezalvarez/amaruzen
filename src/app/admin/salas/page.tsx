@@ -74,7 +74,15 @@ export default function SalasPage() {
 
   async function desactivar(id: string) {
     if (!confirm("¿Desactivar esta sala?")) return;
-    await fetch(`/api/admin/salas/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/admin/salas/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json();
+      const clases = Array.isArray(data.clases) && data.clases.length > 0
+        ? `\nClases activas: ${data.clases.join(", ")}`
+        : "";
+      alert((data.error || "No se pudo desactivar") + clases);
+      return;
+    }
     cargar();
   }
 
