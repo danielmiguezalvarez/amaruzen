@@ -1,3 +1,4 @@
+import { ModalidadInscripcion } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api-auth";
@@ -10,14 +11,28 @@ function overlap(aInicio: string, aFin: string, bInicio: string, bFin: string): 
   return toMinutes(aInicio) < toMinutes(bFin) && toMinutes(bInicio) < toMinutes(aFin);
 }
 
-// POST body: { claseId, numClases, horarioIds: string[] }
+// POST body: { claseId, modalidad?, numClases?, horarioIds?: string[], creditosBono?: number }
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
 
-  const { claseId, numClases, horarioIds } = await req.json();
-  if (!claseId || !Array.isArray(horarioIds) || horarioIds.length === 0) {
+  const { claseId, modalidad, numClases, horarioIds, creditosBono } = await req.json();
+  const modalidadNorm: ModalidadInscripcion = modalidad === "BONO" ? "BONO" : "SEMANAL";
+  const horariosIdsNorm: string[] = Array.isArray(horarioIds) ? horarioIds : [];
+
+  if (!claseId) {
     return NextResponse.json({ error: "Faltan datos de inscripción" }, { status: 400 });
+  }
+
+  if (modalidadNorm === "SEMANAL" && horariosIdsNorm.length === 0) {
+    return NextResponse.json({ error: "Debes seleccionar al menos un horario para inscripción semanal" }, { status: 400 });
+  }
+
+  if (modalidadNorm === "BONO") {
+    const creditos = Number(creditosBono);
+    if (!Number.isFinite(creditos) || creditos <= 0) {
+      return NextResponse.json({ error: "El bono debe tener al menos 1 crédito" }, { status: 400 });
+    }
   }
 
   const alumno = await prisma.user.findUnique({
@@ -31,69 +46,95 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return NextResponse.json({ error: "No se puede inscribir un alumno de baja" }, { status: 409 });
   }
 
-  const numClasesNum = Number(numClases) || horarioIds.length;
-  if (horarioIds.length > numClasesNum) {
+  const existente = await prisma.inscripcion.findUnique({
+    where: { userId_claseId: { userId: params.id, claseId } },
+    select: { modalidad: true, activa: true },
+  });
+
+  if (existente && existente.activa && existente.modalidad !== modalidadNorm) {
+    return NextResponse.json(
+      { error: "El alumno ya tiene una inscripción activa de otra modalidad en esta clase" },
+      { status: 409 }
+    );
+  }
+
+  const numClasesNum = Number(numClases) || horariosIdsNorm.length || 1;
+  if (modalidadNorm === "SEMANAL" && horariosIdsNorm.length > numClasesNum) {
     return NextResponse.json(
       { error: "No puedes asignar más horarios que clases contratadas" },
       { status: 409 }
     );
   }
 
-  const horarios = await prisma.horario.findMany({
-    where: { id: { in: horarioIds }, claseId, activo: true },
-    include: { clase: true },
-  });
-  if (horarios.length !== horarioIds.length) {
+  const horarios = modalidadNorm === "SEMANAL"
+    ? await prisma.horario.findMany({
+        where: { id: { in: horariosIdsNorm }, claseId, activo: true },
+        include: { clase: true },
+      })
+    : [];
+  if (modalidadNorm === "SEMANAL" && horarios.length !== horariosIdsNorm.length) {
     return NextResponse.json({ error: "Algún horario no existe o no pertenece a la clase" }, { status: 404 });
   }
 
-  for (const h of horarios) {
-    const ocupados = await prisma.inscripcionHorario.count({
-      where: {
-        horarioId: h.id,
-        activa: true,
-        inscripcion: {
+  if (modalidadNorm === "SEMANAL") {
+    for (const h of horarios) {
+      const ocupadosBase = await prisma.inscripcionHorario.count({
+        where: {
+          horarioId: h.id,
           activa: true,
-          user: { activo: true },
-          userId: { not: params.id },
+          inscripcion: {
+            activa: true,
+            user: { activo: true },
+            userId: { not: params.id },
+          },
         },
-      },
-    });
-    const aforoMax = h.aforo || h.clase.aforo;
-    if (ocupados + 1 > aforoMax) {
-      const etiqueta = h.fecha
-        ? `${h.fecha.toISOString().slice(0, 10)} ${h.horaInicio}-${h.horaFin}`
-        : `${h.diaSemana || ""} ${h.horaInicio}-${h.horaFin}`;
-      return NextResponse.json(
-        { error: `Aforo completo en el horario ${etiqueta}` },
-        { status: 409 }
-      );
+      });
+      const aforoMax = h.aforo || h.clase.aforo;
+      if (ocupadosBase + 1 > aforoMax) {
+        const etiqueta = h.fecha
+          ? `${h.fecha.toISOString().slice(0, 10)} ${h.horaInicio}-${h.horaFin}`
+          : `${h.diaSemana || ""} ${h.horaInicio}-${h.horaFin}`;
+        return NextResponse.json(
+          { error: `Aforo completo en el horario ${etiqueta}` },
+          { status: 409 }
+        );
+      }
     }
   }
 
-  const seleccionadosPorDia = new Map<string, Array<{ inicio: string; fin: string }>>();
-  for (const h of horarios) {
-    const dia = h.fecha ? h.fecha.toISOString().slice(0, 10) : (h.diaSemana || "");
-    const list = seleccionadosPorDia.get(dia) || [];
-    const conflict = list.some((x) => overlap(h.horaInicio, h.horaFin, x.inicio, x.fin));
-    if (conflict) {
-      return NextResponse.json({ error: "Hay horarios solapados en la selección" }, { status: 409 });
+  if (modalidadNorm === "SEMANAL") {
+    const seleccionadosPorDia = new Map<string, Array<{ inicio: string; fin: string }>>();
+    for (const h of horarios) {
+      const dia = h.fecha ? h.fecha.toISOString().slice(0, 10) : (h.diaSemana || "");
+      const list = seleccionadosPorDia.get(dia) || [];
+      const conflict = list.some((x) => overlap(h.horaInicio, h.horaFin, x.inicio, x.fin));
+      if (conflict) {
+        return NextResponse.json({ error: "Hay horarios solapados en la selección" }, { status: 409 });
+      }
+      list.push({ inicio: h.horaInicio, fin: h.horaFin });
+      seleccionadosPorDia.set(dia, list);
     }
-    list.push({ inicio: h.horaInicio, fin: h.horaFin });
-    seleccionadosPorDia.set(dia, list);
   }
+
+  const creditosNum = modalidadNorm === "BONO" ? Number(creditosBono) : null;
 
   const inscripcion = await prisma.inscripcion.upsert({
     where: { userId_claseId: { userId: params.id, claseId } },
     update: {
       activa: true,
       numClases: numClasesNum,
+      modalidad: modalidadNorm,
+      creditosIniciales: creditosNum,
+      creditosDisponibles: creditosNum,
     },
     create: {
       userId: params.id,
       claseId,
       activa: true,
       numClases: numClasesNum,
+      modalidad: modalidadNorm,
+      creditosIniciales: creditosNum,
+      creditosDisponibles: creditosNum,
     },
   });
 
@@ -102,21 +143,23 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     data: { activa: false },
   });
 
-  for (const horarioId of horarioIds as string[]) {
-    await prisma.inscripcionHorario.upsert({
-      where: {
-        inscripcionId_horarioId: {
+  if (modalidadNorm === "SEMANAL") {
+    for (const horarioId of horariosIdsNorm) {
+      await prisma.inscripcionHorario.upsert({
+        where: {
+          inscripcionId_horarioId: {
+            inscripcionId: inscripcion.id,
+            horarioId,
+          },
+        },
+        update: { activa: true },
+        create: {
           inscripcionId: inscripcion.id,
           horarioId,
+          activa: true,
         },
-      },
-      update: { activa: true },
-      create: {
-        inscripcionId: inscripcion.id,
-        horarioId,
-        activa: true,
-      },
-    });
+      });
+    }
   }
 
   return NextResponse.json({ ok: true, inscripcion }, { status: 201 });

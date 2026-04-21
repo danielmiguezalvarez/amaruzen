@@ -44,8 +44,12 @@ export async function POST(req: Request) {
   const inicioParsed = new Date(sesionOrigen.fecha);
   const [h, m] = sesionOrigen.horaInicio.split(":").map(Number);
   inicioParsed.setHours(h, m, 0, 0);
-  if (ahora >= inicioParsed) {
-    return NextResponse.json({ error: "La clase ya ha empezado" }, { status: 400 });
+  const limiteCambio = new Date(inicioParsed.getTime() - 2 * 60 * 60 * 1000);
+  if (ahora >= limiteCambio) {
+    return NextResponse.json(
+      { error: "Solo puedes cancelar o cambiar con al menos 2 horas de antelación. Si falta menos tiempo, habla con el admin." },
+      { status: 400 }
+    );
   }
 
   // Determinar si requiere aprobación

@@ -35,6 +35,7 @@ type OcupacionSesion = {
   ausencias: number;
   cambiosEntrantes: number;
   cambiosSalientes: number;
+  bonos: number;
   ocupados: number;
   libres: number;
 };
@@ -329,6 +330,7 @@ export async function calcularOcupacionesSemanaBatch(sesiones: SesionCalendario[
     ausencias: bigint;
     cambiosEntrantes: bigint;
     cambiosSalientes: bigint;
+    bonos: bigint;
   }>>(Prisma.sql`
 WITH objetivo ("horarioId", "fecha") AS (
   VALUES ${Prisma.join(objetivos)}
@@ -365,7 +367,19 @@ SELECT
     WHERE c."estado" IN ('PENDIENTE', 'APROBADO')
       AND so."horarioId" = o."horarioId"
       AND so."fecha" = o."fecha"
-  ) AS "cambiosSalientes"
+  ) AS "cambiosSalientes",
+  (
+    SELECT COUNT(*)
+    FROM "UsoBonoSesion" u
+    JOIN "Sesion" sb ON sb."id" = u."sesionId"
+    JOIN "Inscripcion" ib ON ib."id" = u."inscripcionId"
+    JOIN "User" uu ON uu."id" = u."userId"
+    WHERE u."activo" = true
+      AND ib."activa" = true
+      AND uu."activo" = true
+      AND sb."horarioId" = o."horarioId"
+      AND sb."fecha" = o."fecha"
+  ) AS "bonos"
 FROM objetivo o
 `);
 
@@ -381,7 +395,8 @@ FROM objetivo o
     const ausencias = Number(r.ausencias);
     const cambiosEntrantes = Number(r.cambiosEntrantes);
     const cambiosSalientes = Number(r.cambiosSalientes);
-    const ocupados = inscritos - ausencias + cambiosEntrantes - cambiosSalientes;
+    const bonos = Number(r.bonos);
+    const ocupados = inscritos - ausencias + cambiosEntrantes - cambiosSalientes + bonos;
     const k = toKey(r.horarioId, r.fecha);
     const aforo = aforoPorKey.get(k) ?? 0;
     ocupacionPorKey.set(k, {
@@ -389,6 +404,7 @@ FROM objetivo o
       ausencias,
       cambiosEntrantes,
       cambiosSalientes,
+      bonos,
       ocupados,
       libres: aforo - ocupados,
     });
@@ -402,6 +418,7 @@ FROM objetivo o
       ausencias: 0,
       cambiosEntrantes: 0,
       cambiosSalientes: 0,
+      bonos: 0,
       ocupados: 0,
       libres: s.aforo,
     });
@@ -411,7 +428,7 @@ FROM objetivo o
 }
 
 export async function calcularOcupacionSesion(horarioId: string, fecha: Date, aforo: number) {
-  const [base, ausencias, cambiosEntrantes, cambiosSalientes] = await Promise.all([
+  const [base, ausencias, cambiosEntrantes, cambiosSalientes, bonos] = await Promise.all([
     prisma.inscripcionHorario.count({
       where: { horarioId, activa: true, inscripcion: { activa: true } },
     }),
@@ -430,14 +447,23 @@ export async function calcularOcupacionSesion(horarioId: string, fecha: Date, af
         sesionOrigen: { horarioId, fecha: normalizarFecha(fecha) },
       },
     }),
+    prisma.usoBonoSesion.count({
+      where: {
+        activo: true,
+        sesion: { horarioId, fecha: normalizarFecha(fecha) },
+        inscripcion: { activa: true },
+        user: { activo: true },
+      },
+    }),
   ]);
 
-  const ocupados = base - ausencias + cambiosEntrantes - cambiosSalientes;
+  const ocupados = base - ausencias + cambiosEntrantes - cambiosSalientes + bonos;
   return {
     inscritos: base,
     ausencias,
     cambiosEntrantes,
     cambiosSalientes,
+    bonos,
     ocupados,
     libres: aforo - ocupados,
   };

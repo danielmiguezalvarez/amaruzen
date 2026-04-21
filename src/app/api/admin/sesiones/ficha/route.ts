@@ -290,22 +290,51 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Sesión destino no encontrada" }, { status: 404 });
   }
 
-  const convenio = await prisma.convenio.findFirst({
-    where: {
-      activo: true,
-      OR: [
-        { claseAId: sesionOrigen.claseId, claseBId: sesionDestino.claseId },
-        { claseAId: sesionDestino.claseId, claseBId: sesionOrigen.claseId },
-      ],
-    },
-    select: { id: true },
-  });
+  const mismaClase = sesionOrigen.claseId === sesionDestino.claseId;
+  let convenio: { id: string; limiteMensual: number } | null = null;
 
-  if (!convenio) {
-    return NextResponse.json(
-      { error: "No existe convenio activo entre la clase origen y la clase destino" },
-      { status: 409 }
-    );
+  if (!mismaClase) {
+    convenio = await prisma.convenio.findFirst({
+      where: {
+        activo: true,
+        OR: [
+          { claseAId: sesionOrigen.claseId, claseBId: sesionDestino.claseId },
+          { claseAId: sesionDestino.claseId, claseBId: sesionOrigen.claseId },
+        ],
+      },
+      select: { id: true, limiteMensual: true },
+    });
+
+    if (!convenio) {
+      return NextResponse.json(
+        { error: "No existe convenio activo entre la clase origen y la clase destino" },
+        { status: 409 }
+      );
+    }
+
+    const inicioMes = new Date(sesionDestino.fecha.getFullYear(), sesionDestino.fecha.getMonth(), 1);
+    const finMes = new Date(sesionDestino.fecha.getFullYear(), sesionDestino.fecha.getMonth() + 1, 1);
+
+    const cambiosMes = await prisma.cambio.count({
+      where: {
+        userId,
+        convenioId: convenio.id,
+        estado: { in: ["PENDIENTE", "APROBADO"] },
+        sesionDestino: {
+          fecha: {
+            gte: inicioMes,
+            lt: finMes,
+          },
+        },
+      },
+    });
+
+    if (cambiosMes >= convenio.limiteMensual) {
+      return NextResponse.json(
+        { error: `El alumno ya alcanzó el límite mensual (${convenio.limiteMensual}) para este convenio` },
+        { status: 409 }
+      );
+    }
   }
 
   const yaEnDestino = await prisma.inscripcionHorario.count({
@@ -385,7 +414,7 @@ export async function POST(req: Request) {
       userId,
       sesionOrigenId: sesionOrigen.id,
       sesionDestinoId: sesionDestino.id,
-      convenioId: convenioId || convenio.id,
+      convenioId: convenioId || convenio?.id || null,
       estado: "APROBADO",
     },
   });

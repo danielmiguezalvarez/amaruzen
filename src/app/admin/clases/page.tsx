@@ -283,17 +283,17 @@ export default function ClasesPage() {
                       {c.horarios.length === 0 ? (
                         <span className="text-red-400 text-xs">Sin horarios</span>
                       ) : (
-                        <div className="space-y-0.5">
-                          {c.horarios.map((h) => (
-                            <button
-                              key={h.id}
-                              type="button"
-                              onClick={() => verAlumnosHorario(h.id)}
-                              className="text-xs hover:underline text-left"
-                            >
-                              {h.diaSemana ? DIAS_ES[h.diaSemana] : "Puntual"} {h.horaInicio}–{h.horaFin}
-                            </button>
-                          ))}
+                          <div className="space-y-1">
+                           {c.horarios.map((h) => (
+                             <button
+                               key={h.id}
+                               type="button"
+                               onClick={() => verAlumnosHorario(h.id)}
+                               className="block text-xs px-2 py-1 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-700 hover:text-stone-900 transition-colors text-left w-full"
+                             >
+                               {h.diaSemana ? DIAS_ES[h.diaSemana] : "Puntual"} {h.horaInicio}–{h.horaFin}
+                             </button>
+                           ))}
                         </div>
                       )}
                     </td>

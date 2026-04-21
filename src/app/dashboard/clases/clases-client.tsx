@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import CalendarioGrid from "@/components/CalendarioGrid";
 import CalendarioLista from "@/components/CalendarioLista";
@@ -17,6 +17,7 @@ type Sesion = {
   aforo: number;
   cancelada: boolean;
   esInscrito: boolean;
+  esBono?: boolean;
   clase: {
     id: string;
     nombre: string;
@@ -24,6 +25,16 @@ type Sesion = {
     profesor: { nombre: string };
     sala: { id: string; nombre: string; color?: string | null };
   };
+};
+
+type BonoAlumno = {
+  id: string;
+  claseId: string;
+  claseNombre: string;
+  profesorNombre: string;
+  creditosIniciales: number;
+  creditosDisponibles: number;
+  usosActivos: number;
 };
 
 type SesionDisponible = {
@@ -60,6 +71,7 @@ export default function ClasesClient() {
   const [loadingOpciones, setLoadingOpciones] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [exito, setExito] = useState("");
+  const [bonos, setBonos] = useState<BonoAlumno[]>([]);
 
   const cargar = useCallback(async (lunesDate: Date) => {
     setLoading(true);
@@ -70,8 +82,46 @@ export default function ClasesClient() {
       setSalas(data.salas || []);
       setReservas(data.reservas || []);
     }
+
+    const bonosRes = await fetch("/api/alumno/bono");
+    if (bonosRes.ok) {
+      const bonosData = await bonosRes.json();
+      setBonos(Array.isArray(bonosData) ? bonosData : []);
+    } else {
+      setBonos([]);
+    }
     setLoading(false);
   }, []);
+
+  async function reservarConBono(sesionId: string) {
+    const res = await fetch("/api/alumno/bono", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sesionId }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      alert(d.error || "No se pudo reservar con bono");
+      return;
+    }
+    setExito("Reserva con bono realizada correctamente.");
+    await cargar(lunes);
+  }
+
+  async function cancelarConBono(sesionId: string) {
+    const res = await fetch("/api/alumno/bono", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sesionId }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      alert(d.error || "No se pudo cancelar la reserva de bono");
+      return;
+    }
+    setExito("Reserva con bono cancelada. Crédito devuelto.");
+    await cargar(lunes);
+  }
 
   useEffect(() => { cargar(lunes); }, [lunes, cargar]);
 
@@ -161,6 +211,11 @@ export default function ClasesClient() {
   const domingo = diasSemana[6];
   const labelSemana = `${lunes.getDate()} ${lunes.toLocaleString("es-ES", { month: "short" })} – ${domingo.getDate()} ${domingo.toLocaleString("es-ES", { month: "short", year: "numeric" })}`;
   const ahora = new Date();
+  const bonosPorClase = useMemo(() => {
+    const map = new Map<string, BonoAlumno>();
+    for (const b of bonos) map.set(b.claseId, b);
+    return map;
+  }, [bonos]);
 
   function onClickEvento(ev: EventoCalendario) {
     if (ev.tipo !== "CLASE") return;
@@ -183,6 +238,21 @@ export default function ClasesClient() {
 
       {exito && (
         <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">{exito}</div>
+      )}
+
+      {bonos.length > 0 && (
+        <div className="bg-white rounded-xl border border-stone-200 p-4">
+          <h2 className="font-semibold text-stone-800 mb-2">Mis bonos</h2>
+          <ul className="space-y-2">
+            {bonos.map((b) => (
+              <li key={b.id} className="text-sm text-stone-700 bg-stone-50 rounded-lg px-3 py-2">
+                <span className="font-medium">{b.claseNombre}</span>
+                <span className="text-stone-500"> · {b.profesorNombre}</span>
+                <span className="ml-2 text-stone-600">{b.creditosDisponibles}/{b.creditosIniciales} créditos</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* Navegación semana */}
@@ -210,6 +280,60 @@ export default function ClasesClient() {
         <>
           <CalendarioGrid lunes={lunes} salas={salas} eventos={eventos} onClickEvento={onClickEvento} />
           <CalendarioLista lunes={lunes} eventos={eventos} onClickEvento={onClickEvento} />
+
+          <div className="bg-white rounded-xl border border-stone-200 p-4">
+            <h2 className="font-semibold text-stone-800 mb-2">Apuntarme con bono</h2>
+            <p className="text-xs text-stone-500 mb-3">Solo para sesiones futuras de clases donde tengas bono con créditos disponibles.</p>
+            <div className="space-y-2 max-h-64 overflow-auto">
+              {sesiones
+                .filter((s) => {
+                  const bono = bonosPorClase.get(s.clase.id);
+                  if (!bono || bono.creditosDisponibles <= 0) return false;
+                  const fechaSesion = new Date(s.fecha);
+                  const [h, m] = s.horaInicio.split(":").map(Number);
+                  fechaSesion.setHours(h, m, 0, 0);
+                  return fechaSesion > ahora && !s.cancelada;
+                })
+                .map((s) => {
+                  const fechaSesion = new Date(s.fecha);
+                  const [h, m] = s.horaInicio.split(":").map(Number);
+                  fechaSesion.setHours(h, m, 0, 0);
+                  const limite = new Date(fechaSesion.getTime() - 2 * 60 * 60 * 1000);
+                  const puedeCancelar = ahora < limite;
+                  return (
+                    <div key={`bono_${s.id}`} className="border border-stone-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm text-stone-800 font-medium">{s.clase.nombre}</p>
+                        <p className="text-xs text-stone-500">
+                          {new Date(s.fecha).toLocaleDateString("es-ES")} · {s.horaInicio}-{s.horaFin} · {s.clase.sala.nombre}
+                        </p>
+                      </div>
+                      {!s.esInscrito ? (
+                        <button
+                          type="button"
+                          onClick={() => reservarConBono(s.id)}
+                          className="px-3 py-1.5 text-xs rounded border border-stone-300 hover:bg-stone-50"
+                        >
+                          Apuntarme
+                        </button>
+                      ) : s.esBono ? (
+                        <button
+                          type="button"
+                          disabled={!puedeCancelar}
+                          onClick={() => cancelarConBono(s.id)}
+                          className="px-3 py-1.5 text-xs rounded border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                          title={!puedeCancelar ? "Solo puedes cancelar con al menos 2 horas de antelación" : undefined}
+                        >
+                          Cancelar
+                        </button>
+                      ) : (
+                        <span className="text-xs text-stone-500">Ya inscrito por horario</span>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
         </>
       )}
 
@@ -226,6 +350,12 @@ export default function ClasesClient() {
             <div className="bg-stone-50 rounded-lg p-3 mb-5 text-sm text-stone-600">
               <strong>{sesionSeleccionada.clase.nombre}</strong> —{" "}
               {new Date(sesionSeleccionada.fecha).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })} a las <strong>{sesionSeleccionada.horaInicio}</strong>
+            </div>
+
+            <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="text-xs text-amber-800">
+                Solo puedes cancelar o cambiar con al menos 2 horas de antelacion. Si falta menos tiempo, habla con el admin.
+              </p>
             </div>
 
             {loadingOpciones ? (

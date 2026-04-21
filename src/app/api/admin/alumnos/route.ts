@@ -30,6 +30,10 @@ export async function GET() {
               },
             },
           },
+          usosBono: {
+            where: { activo: true },
+            select: { id: true },
+          },
         },
       },
     },

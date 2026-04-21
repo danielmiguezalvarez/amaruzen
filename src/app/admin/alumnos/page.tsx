@@ -15,6 +15,10 @@ type HorarioClase = {
 type Inscripcion = {
   id: string;
   numClases: number;
+  modalidad?: "SEMANAL" | "BONO";
+  creditosIniciales?: number | null;
+  creditosDisponibles?: number | null;
+  usosBono?: Array<{ id: string }>;
   clase: { id: string; nombre: string; profesor: { nombre: string } };
   horarios: Array<{ horario: HorarioClase }>;
 };
@@ -65,7 +69,9 @@ export default function AlumnosPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   const [claseAnadir, setClaseAnadir] = useState("");
+  const [modalidadAnadir, setModalidadAnadir] = useState<"SEMANAL" | "BONO">("SEMANAL");
   const [numClases, setNumClases] = useState("1");
+  const [creditosBono, setCreditosBono] = useState("10");
   const [horariosSel, setHorariosSel] = useState<string[]>([]);
 
   async function cargar() {
@@ -140,8 +146,9 @@ export default function AlumnosPage() {
   }
 
   async function anadirInscripcion(alumnoId: string) {
-    if (!claseAnadir || horariosSel.length === 0) return;
-    if (horariosSel.length > (Number(numClases) || 0)) {
+    if (!claseAnadir) return;
+    if (modalidadAnadir === "SEMANAL" && horariosSel.length === 0) return;
+    if (modalidadAnadir === "SEMANAL" && horariosSel.length > (Number(numClases) || 0)) {
       alert("No puedes seleccionar más horarios que clases contratadas");
       return;
     }
@@ -150,8 +157,10 @@ export default function AlumnosPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         claseId: claseAnadir,
+        modalidad: modalidadAnadir,
         numClases: Number(numClases) || horariosSel.length,
         horarioIds: horariosSel,
+        creditosBono: Number(creditosBono) || 0,
       }),
     });
     if (!res.ok) {
@@ -161,7 +170,9 @@ export default function AlumnosPage() {
     }
 
     setClaseAnadir("");
+    setModalidadAnadir("SEMANAL");
     setNumClases("1");
+    setCreditosBono("10");
     setHorariosSel([]);
     await refrescarDetalle(alumnoId);
   }
@@ -347,7 +358,9 @@ export default function AlumnosPage() {
                         <div>
                           <p className="text-sm font-medium text-stone-800">{i.clase.nombre}</p>
                           <p className="text-xs text-stone-500">
-                            {i.clase.profesor.nombre} · {i.horarios.length}/{i.numClases} horarios
+                            {i.clase.profesor.nombre} · {i.modalidad === "BONO"
+                              ? `Bono ${i.creditosDisponibles ?? 0}/${i.creditosIniciales ?? 0} créditos`
+                              : `${i.horarios.length}/${i.numClases} horarios`}
                           </p>
                         </div>
                         <button
@@ -357,7 +370,7 @@ export default function AlumnosPage() {
                           Quitar
                         </button>
                       </div>
-                      {i.horarios.length > 0 && (
+                      {i.modalidad !== "BONO" && i.horarios.length > 0 && (
                         <ul className="mt-2 space-y-1">
                           {i.horarios.map((h) => (
                             <li key={h.horario.id} className="text-xs text-stone-600">
@@ -395,6 +408,24 @@ export default function AlumnosPage() {
                     </select>
                   </div>
                   <div>
+                    <label className="block text-xs text-stone-500 mb-1">Modalidad</label>
+                    <select
+                      value={modalidadAnadir}
+                      onChange={(e) => {
+                        const v = (e.target.value as "SEMANAL" | "BONO");
+                        setModalidadAnadir(v);
+                        setHorariosSel([]);
+                      }}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm"
+                    >
+                      <option value="SEMANAL">Semanal</option>
+                      <option value="BONO">Bono</option>
+                    </select>
+                  </div>
+                </div>
+
+                {modalidadAnadir === "SEMANAL" ? (
+                  <div className="mb-3">
                     <label className="block text-xs text-stone-500 mb-1">Veces por semana/contrato</label>
                     <input
                       type="number"
@@ -404,9 +435,20 @@ export default function AlumnosPage() {
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm"
                     />
                   </div>
-                </div>
+                ) : (
+                  <div className="mb-3">
+                    <label className="block text-xs text-stone-500 mb-1">Créditos del bono</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={creditosBono}
+                      onChange={(e) => setCreditosBono(e.target.value)}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm"
+                    />
+                  </div>
+                )}
 
-                {claseSeleccionada && (
+                {claseSeleccionada && modalidadAnadir === "SEMANAL" && (
                   <div className="mb-3">
                     <p className="text-xs font-medium text-stone-600 mb-1">Selecciona horarios</p>
                     {horariosSel.length > (Number(numClases) || 0) && (
@@ -439,7 +481,7 @@ export default function AlumnosPage() {
 
                 <button
                   onClick={() => anadirInscripcion(detalle.id)}
-                  disabled={!claseAnadir || horariosSel.length === 0}
+                  disabled={!claseAnadir || (modalidadAnadir === "SEMANAL" && horariosSel.length === 0)}
                   className="px-4 py-2 bg-stone-800 text-white rounded-lg text-sm font-medium hover:bg-stone-700 disabled:opacity-50"
                 >
                   Guardar inscripción

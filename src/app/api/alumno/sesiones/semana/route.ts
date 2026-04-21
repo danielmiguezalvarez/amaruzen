@@ -31,6 +31,18 @@ export async function GET(req: Request) {
     });
     const horariosPropios = new Set(inscripciones.map((i) => i.horarioId));
 
+    const usosBono = await prisma.usoBonoSesion.findMany({
+      where: {
+        userId: session.user.id,
+        activo: true,
+        sesion: {
+          fecha: { gte: lunes, lte: domingo },
+        },
+      },
+      select: { sesionId: true },
+    });
+    const sesionesBono = new Set(usosBono.map((u) => u.sesionId));
+
     const sesionesConFlag = sesiones.map((s) => ({
       id: s.sesionId || `${s.horarioId}__${s.fecha.toISOString().slice(0, 10)}`,
       sesionId: s.sesionId,
@@ -41,7 +53,8 @@ export async function GET(req: Request) {
       horaFin: s.horaFin,
       aforo: s.aforo,
       cancelada: s.cancelada,
-      esInscrito: horariosPropios.has(s.horarioId),
+      esInscrito: horariosPropios.has(s.horarioId) || (s.sesionId ? sesionesBono.has(s.sesionId) : false),
+      esBono: s.sesionId ? sesionesBono.has(s.sesionId) : false,
       clase: s.clase,
     }));
 

@@ -64,7 +64,7 @@ type ProfesorLite = {
 };
 
 type ConvenioLite = {
-  activa: boolean;
+  activo: boolean;
   claseA: { id: string };
   claseB: { id: string };
 };
@@ -140,7 +140,7 @@ export default function SesionesPage() {
     fetch("/api/admin/convenios")
       .then((r) => r.json())
       .then((data) => {
-        setConveniosLite((data || []).filter((c: ConvenioLite) => c.activa));
+        setConveniosLite((data || []).filter((c: ConvenioLite) => c.activo));
       })
       .catch(() => setConveniosLite([]));
   }, []);
@@ -253,7 +253,7 @@ export default function SesionesPage() {
 
   async function marcarAusenciaAlumno(alumnoId: string) {
     if (!fichaData) return;
-    const origenRef = `${fichaData.sesion.horarioId}__${new Date(fichaData.sesion.fecha).toISOString().slice(0, 10)}`;
+    const origenRef = `${fichaData.sesion.horarioId}__${toLocalYMD(new Date(fichaData.sesion.fecha))}`;
     await fetch("/api/admin/sesiones/ficha", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -277,7 +277,7 @@ export default function SesionesPage() {
       body: JSON.stringify({
         tipo: "CAMBIO",
         userId: alumnoMoverId,
-        sesionOrigenId: `${fichaData.sesion.horarioId}__${new Date(fichaData.sesion.fecha).toISOString().slice(0, 10)}`,
+        sesionOrigenId: `${fichaData.sesion.horarioId}__${toLocalYMD(new Date(fichaData.sesion.fecha))}`,
         sesionDestinoId: moverDestinoId,
         permanente: moverPermanente,
       }),
@@ -299,26 +299,40 @@ export default function SesionesPage() {
     const origenClaseId = fichaData.sesion.claseId;
     const set = new Set<string>();
     for (const c of conveniosLite) {
-      if (!c.activa) continue;
+      if (!c.activo) continue;
       if (c.claseA.id === origenClaseId) set.add(c.claseB.id);
       if (c.claseB.id === origenClaseId) set.add(c.claseA.id);
     }
     return set;
   }, [conveniosLite, fichaData]);
 
-  const opcionesMover = sesiones
+  const opcionesMoverMismaClase = sesiones
     .filter((s) => {
       if (!fichaData) return false;
-      // Excluir la sesión origen: comparar por sesionId real o por la clave horarioId__fecha
-      const origenKey = `${fichaData.sesion.horarioId}__${new Date(fichaData.sesion.fecha).toISOString().slice(0, 10)}`;
+      const origenKey = `${fichaData.sesion.horarioId}__${toLocalYMD(new Date(fichaData.sesion.fecha))}`;
       const esMismaKey = s.id === origenKey || (s.sesionId !== null && s.sesionId === fichaData.sesion.id);
       if (esMismaKey || s.cancelada) return false;
-      return clasesConConvenio.has(s.claseId);
+      return s.claseId === fichaData.sesion.claseId;
     })
     .map((s) => ({
       id: s.id,
       label: `${s.clase.nombre} · ${new Date(s.fecha).toLocaleDateString("es-ES")} · ${s.horaInicio}-${s.horaFin} · ${s.clase.sala.nombre}`,
     }));
+
+  const opcionesMoverConvenio = sesiones
+    .filter((s) => {
+      if (!fichaData) return false;
+      const origenKey = `${fichaData.sesion.horarioId}__${toLocalYMD(new Date(fichaData.sesion.fecha))}`;
+      const esMismaKey = s.id === origenKey || (s.sesionId !== null && s.sesionId === fichaData.sesion.id);
+      if (esMismaKey || s.cancelada) return false;
+      return s.claseId !== fichaData.sesion.claseId && clasesConConvenio.has(s.claseId);
+    })
+    .map((s) => ({
+      id: s.id,
+      label: `${s.clase.nombre} · ${new Date(s.fecha).toLocaleDateString("es-ES")} · ${s.horaInicio}-${s.horaFin} · ${s.clase.sala.nombre}`,
+    }));
+
+  const opcionesMover = [...opcionesMoverMismaClase, ...opcionesMoverConvenio];
 
   function onClickHueco(ctx: { fecha: string; salaId: string; hora: string }) {
     const sala = salas.find((s) => s.id === ctx.salaId);
@@ -456,12 +470,23 @@ export default function SesionesPage() {
                   className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm"
                 >
                   <option value="">Selecciona...</option>
-                  {opcionesMover.map((o) => (
-                    <option key={o.id} value={o.id}>{o.label}</option>
-                  ))}
+                  {opcionesMoverMismaClase.length > 0 && (
+                    <optgroup label="Misma clase">
+                      {opcionesMoverMismaClase.map((o) => (
+                        <option key={o.id} value={o.id}>{o.label}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {opcionesMoverConvenio.length > 0 && (
+                    <optgroup label="Con convenio">
+                      {opcionesMoverConvenio.map((o) => (
+                        <option key={o.id} value={o.id}>{o.label}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
                 {opcionesMover.length === 0 && (
-                  <p className="text-xs text-amber-700 mt-1">No hay sesiones de destino con convenio activo.</p>
+                  <p className="text-xs text-amber-700 mt-1">No hay sesiones de destino disponibles (misma clase o convenio).</p>
                 )}
               </div>
               <label className="flex items-center gap-2 text-sm text-stone-700">
