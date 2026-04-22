@@ -394,14 +394,16 @@ model Reserva {
 }
 
 model SolicitudAlta {
-  id        String   @id @default(cuid())
-  nombre    String
-  email     String
-  telefono  String?
-  tipo      String   // "ALUMNO" | "PROFESIONAL"
-  mensaje   String?
-  leida     Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  nombre      String
+  email       String
+  telefono    String?
+  tipo        String   // "ALUMNO" | "PROFESIONAL"
+  mensaje     String?
+  leida       Boolean  @default(false)
+  estado      String   @default("PENDIENTE") // "PENDIENTE" | "ACEPTADA" | "DESCARTADA"
+  usuarioId   String?  // User creado al aceptar
+  createdAt   DateTime @default(now())
 }
 
 model Ausencia {

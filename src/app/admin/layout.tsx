@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -20,6 +21,22 @@ const navItems = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const pathname = usePathname();
+  const [solicitudesSinLeer, setSolicitudesSinLeer] = useState(0);
+
+  useEffect(() => {
+    async function cargarBadge() {
+      try {
+        const res = await fetch("/api/admin/solicitudes");
+        if (res.ok) {
+          const data: Array<{ estado: string }> = await res.json();
+          setSolicitudesSinLeer(data.filter((s) => s.estado === "PENDIENTE").length);
+        }
+      } catch {
+        // silenciar — no bloquear el layout
+      }
+    }
+    cargarBadge();
+  }, [pathname]); // re-fetch al navegar
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -48,19 +65,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Subnav */}
         <nav className="border-t border-stone-700 overflow-x-auto">
           <div className="max-w-7xl mx-auto px-4 flex">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`py-2.5 px-3 text-sm whitespace-nowrap transition-colors ${
-                  pathname === item.href
-                    ? "text-white border-b-2 border-white font-medium"
-                    : "text-stone-400 hover:text-white"
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const esSolicitudes = item.href === "/admin/solicitudes";
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`relative py-2.5 px-3 text-sm whitespace-nowrap transition-colors ${
+                    pathname === item.href
+                      ? "text-white border-b-2 border-white font-medium"
+                      : "text-stone-400 hover:text-white"
+                  }`}
+                >
+                  {item.label}
+                  {esSolicitudes && solicitudesSinLeer > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-400 text-stone-900 text-[10px] font-bold flex items-center justify-center leading-none">
+                      {solicitudesSinLeer > 9 ? "9+" : solicitudesSinLeer}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
           </div>
         </nav>
       </header>

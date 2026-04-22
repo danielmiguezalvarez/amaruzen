@@ -1,0 +1,3 @@
+ALTER TABLE "SolicitudAlta"
+  ADD COLUMN "estado"    TEXT NOT NULL DEFAULT 'PENDIENTE',
+  ADD COLUMN "usuarioId" TEXT;
