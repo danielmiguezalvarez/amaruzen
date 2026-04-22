@@ -71,6 +71,7 @@ export async function GET(req: Request) {
       ausencias: bigint;
       cambiosEntrantes: bigint;
       cambiosSalientes: bigint;
+      bonosActivos: bigint;
     }>>(Prisma.sql`
       SELECT
         (
@@ -102,7 +103,15 @@ export async function GET(req: Request) {
           WHERE c."estado" IN ('PENDIENTE', 'APROBADO')
             AND so."horarioId" = ${horarioId}
             AND so."fecha" = ${fecha}
-        ) AS "cambiosSalientes"
+        ) AS "cambiosSalientes",
+        (
+          SELECT COUNT(*)
+          FROM "UsoBonoSesion" ubs
+          JOIN "Sesion" sb ON sb."id" = ubs."sesionId"
+          WHERE ubs."activo" = true
+            AND sb."horarioId" = ${horarioId}
+            AND sb."fecha" = ${fecha}
+        ) AS "bonosActivos"
     `),
     prisma.$queryRaw<Array<{
       id: string;
@@ -112,9 +121,10 @@ export async function GET(req: Request) {
       cambioEntrante: boolean;
       cambioSaliente: boolean;
       esInscrito: boolean;
+      esBono: boolean;
     }>>(Prisma.sql`
       WITH inscritos AS (
-        SELECT u."id", u."name", u."email", true AS "esInscrito"
+        SELECT u."id", u."name", u."email", true AS "esInscrito", false AS "esBono"
         FROM "InscripcionHorario" ih
         JOIN "Inscripcion" i ON i."id" = ih."inscripcionId"
         JOIN "User" u ON u."id" = i."userId"
@@ -123,7 +133,7 @@ export async function GET(req: Request) {
           AND i."activa" = true
       ),
       entrantes AS (
-        SELECT DISTINCT u."id", u."name", u."email", false AS "esInscrito"
+        SELECT DISTINCT u."id", u."name", u."email", false AS "esInscrito", false AS "esBono"
         FROM "Cambio" c
         JOIN "Sesion" sd ON sd."id" = c."sesionDestinoId"
         JOIN "User" u ON u."id" = c."userId"
@@ -134,16 +144,30 @@ export async function GET(req: Request) {
             SELECT 1 FROM inscritos ins WHERE ins."id" = u."id"
           )
       ),
+      bonos AS (
+        SELECT DISTINCT u."id", u."name", u."email", false AS "esInscrito", true AS "esBono"
+        FROM "UsoBonoSesion" ubs
+        JOIN "Sesion" sb ON sb."id" = ubs."sesionId"
+        JOIN "User" u ON u."id" = ubs."userId"
+        WHERE ubs."activo" = true
+          AND sb."horarioId" = ${horarioId}
+          AND sb."fecha" = ${fecha}
+          AND NOT EXISTS (SELECT 1 FROM inscritos ins WHERE ins."id" = u."id")
+          AND NOT EXISTS (SELECT 1 FROM entrantes ent WHERE ent."id" = u."id")
+      ),
       todos AS (
         SELECT * FROM inscritos
         UNION ALL
         SELECT * FROM entrantes
+        UNION ALL
+        SELECT * FROM bonos
       )
       SELECT
         t."id",
         t."name",
         t."email",
         t."esInscrito",
+        t."esBono",
         EXISTS (
           SELECT 1 FROM "Ausencia" a
           WHERE a."userId" = t."id"
@@ -178,18 +202,21 @@ export async function GET(req: Request) {
     ausencias: BigInt(0),
     cambiosEntrantes: BigInt(0),
     cambiosSalientes: BigInt(0),
+    bonosActivos: BigInt(0),
   };
   const inscritos = Number(counts.inscritos);
   const ausenciasCount = Number(counts.ausencias);
   const cambiosEntrantesCount = Number(counts.cambiosEntrantes);
   const cambiosSalientesCount = Number(counts.cambiosSalientes);
-  const ocupados = inscritos - ausenciasCount + cambiosEntrantesCount - cambiosSalientesCount;
+  const bonosActivosCount = Number(counts.bonosActivos);
+  const ocupados = inscritos - ausenciasCount + cambiosEntrantesCount - cambiosSalientesCount + bonosActivosCount;
 
   const ocupacion = {
     inscritos,
     ausencias: ausenciasCount,
     cambiosEntrantes: cambiosEntrantesCount,
     cambiosSalientes: cambiosSalientesCount,
+    bonosActivos: bonosActivosCount,
     ocupados,
     libres: sesion.aforo - ocupados,
   };

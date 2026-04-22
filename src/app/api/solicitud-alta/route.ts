@@ -12,26 +12,31 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Tipo inválido" }, { status: 400 });
   }
 
+  // Persistir la solicitud en BD para que el admin la vea aunque el email falle
+  await prisma.solicitudAlta.create({
+    data: { nombre, email, telefono: telefono || null, tipo, mensaje: mensaje || null },
+  });
+
   const admins = await prisma.user.findMany({
     where: { role: "ADMIN", activo: true },
     select: { email: true },
   });
 
-  try {
-    await Promise.all(
+  if (admins.length > 0) {
+    const resultados = await Promise.allSettled(
       admins.map((a) =>
-        sendSolicitudAltaAdmin({
-          to: a.email,
-          nombre,
-          email,
-          telefono,
-          tipo,
-          mensaje,
-        })
+        sendSolicitudAltaAdmin({ to: a.email, nombre, email, telefono, tipo, mensaje })
       )
     );
-  } catch {
-    // Ignorar errores de email externos
+
+    const alguno = resultados.some((r) => r.status === "fulfilled");
+    if (!alguno) {
+      // Todos fallaron — la solicitud está guardada pero avisar al frontend
+      console.error(
+        "[solicitud-alta] Todos los emails a admins fallaron:",
+        resultados.map((r) => (r.status === "rejected" ? r.reason : "ok"))
+      );
+    }
   }
 
   return NextResponse.json({ ok: true });

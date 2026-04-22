@@ -9,6 +9,42 @@ function inicioSesion(fecha: Date, horaInicio: string) {
   return d;
 }
 
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  const auth = await requireAdmin();
+  if (auth.error) return auth.error;
+
+  const { claseId, ajuste } = await req.json();
+  if (!claseId || typeof ajuste !== "number" || ajuste === 0) {
+    return NextResponse.json({ error: "Falta claseId o ajuste inválido" }, { status: 400 });
+  }
+
+  const inscripcion = await prisma.inscripcion.findUnique({
+    where: { userId_claseId: { userId: params.id, claseId } },
+    select: { id: true, activa: true, modalidad: true, creditosDisponibles: true, creditosIniciales: true },
+  });
+  if (!inscripcion || !inscripcion.activa || inscripcion.modalidad !== "BONO") {
+    return NextResponse.json({ error: "El alumno no tiene bono activo para esta clase" }, { status: 409 });
+  }
+
+  const nuevoSaldo = (inscripcion.creditosDisponibles ?? 0) + ajuste;
+  if (nuevoSaldo < 0) {
+    return NextResponse.json({ error: "El saldo no puede ser negativo" }, { status: 409 });
+  }
+
+  const updated = await prisma.inscripcion.update({
+    where: { id: inscripcion.id },
+    data: {
+      creditosDisponibles: nuevoSaldo,
+      // Si se añaden créditos, actualizar también los iniciales si el nuevo total supera el original
+      ...(ajuste > 0 && nuevoSaldo > (inscripcion.creditosIniciales ?? 0)
+        ? { creditosIniciales: nuevoSaldo }
+        : {}),
+    },
+  });
+
+  return NextResponse.json({ ok: true, creditosDisponibles: updated.creditosDisponibles });
+}
+
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;

@@ -47,6 +47,7 @@ type FichaData = {
     cambioEntrante: boolean;
     cambioSaliente: boolean;
     esInscrito: boolean;
+    esBono: boolean;
   }>;
 };
 
@@ -268,6 +269,24 @@ export default function SesionesPage() {
     if (refetch.ok) setFichaData(await refetch.json());
   }
 
+  async function cancelarBonoAlumno(alumnoId: string) {
+    if (!fichaData?.sesion.id) return;
+    if (!confirm("¿Cancelar reserva de bono? ¿Devolver el crédito?")) return;
+    const res = await fetch(`/api/admin/alumnos/${alumnoId}/bono`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sesionId: fichaData.sesion.id, devolverCredito: true }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || "No se pudo cancelar el bono");
+      return;
+    }
+    const origenRef = `${fichaData.sesion.horarioId}__${toLocalYMD(new Date(fichaData.sesion.fecha))}`;
+    const refetch = await fetch(`/api/admin/sesiones/ficha?sesionRef=${encodeURIComponent(origenRef)}`);
+    if (refetch.ok) setFichaData(await refetch.json());
+  }
+
   async function ejecutarMover() {
     if (!fichaData || !alumnoMoverId || !moverDestinoId) return;
     setProcesandoMover(true);
@@ -454,6 +473,7 @@ export default function SesionesPage() {
         cargando={fichaLoading}
         onMoverAlumno={abrirMoverAlumno}
         onAusenciaAlumno={marcarAusenciaAlumno}
+        onCancelarBono={cancelarBonoAlumno}
         onEliminarSesion={eliminarSesionActual}
       />
 

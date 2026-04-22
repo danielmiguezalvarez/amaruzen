@@ -177,6 +177,28 @@ export default function AlumnosPage() {
     await refrescarDetalle(alumnoId);
   }
 
+  const [ajusteBonoClaseId, setAjusteBonoClaseId] = useState<string | null>(null);
+  const [ajusteValor, setAjusteValor] = useState("1");
+  const [ajustando, setAjustando] = useState(false);
+
+  async function ajustarCreditos(alumnoId: string, claseId: string, ajuste: number) {
+    setAjustando(true);
+    const res = await fetch(`/api/admin/alumnos/${alumnoId}/bono`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claseId, ajuste }),
+    });
+    setAjustando(false);
+    if (!res.ok) {
+      const d = await res.json();
+      alert(d.error || "No se pudo ajustar los créditos");
+      return;
+    }
+    setAjusteBonoClaseId(null);
+    setAjusteValor("1");
+    await refrescarDetalle(alumnoId);
+  }
+
   async function quitarInscripcion(alumnoId: string, claseId: string) {
     if (!confirm("¿Quitar esta inscripción?")) return;
     await fetch(`/api/admin/alumnos/${alumnoId}/inscripciones`, {
@@ -363,13 +385,45 @@ export default function AlumnosPage() {
                               : `${i.horarios.length}/${i.numClases} horarios`}
                           </p>
                         </div>
-                        <button
-                          onClick={() => quitarInscripcion(detalle.id, i.clase.id)}
-                          className="text-xs text-red-400 hover:text-red-600"
-                        >
-                          Quitar
-                        </button>
+                        <div className="flex gap-2 items-center">
+                          {i.modalidad === "BONO" && (
+                            <button
+                              onClick={() => {
+                                setAjusteBonoClaseId(ajusteBonoClaseId === i.clase.id ? null : i.clase.id);
+                                setAjusteValor("1");
+                              }}
+                              className="text-xs text-purple-500 hover:text-purple-700"
+                            >
+                              Ajustar
+                            </button>
+                          )}
+                          <button
+                            onClick={() => quitarInscripcion(detalle.id, i.clase.id)}
+                            className="text-xs text-red-400 hover:text-red-600"
+                          >
+                            Quitar
+                          </button>
+                        </div>
                       </div>
+                      {i.modalidad === "BONO" && ajusteBonoClaseId === i.clase.id && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={ajusteValor}
+                            onChange={(e) => setAjusteValor(e.target.value)}
+                            className="w-20 px-2 py-1 border border-stone-300 rounded text-sm"
+                            placeholder="±n"
+                          />
+                          <button
+                            disabled={ajustando || !ajusteValor || Number(ajusteValor) === 0}
+                            onClick={() => ajustarCreditos(detalle.id, i.clase.id, Number(ajusteValor))}
+                            className="px-3 py-1 bg-stone-800 text-white text-xs rounded hover:bg-stone-700 disabled:opacity-50"
+                          >
+                            {ajustando ? "..." : "Aplicar"}
+                          </button>
+                          <span className="text-xs text-stone-400">Usa negativo para descontar</span>
+                        </div>
+                      )}
                       {i.modalidad !== "BONO" && i.horarios.length > 0 && (
                         <ul className="mt-2 space-y-1">
                           {i.horarios.map((h) => (

@@ -393,6 +393,17 @@ model Reserva {
   @@index([salaId, fecha])
 }
 
+model SolicitudAlta {
+  id        String   @id @default(cuid())
+  nombre    String
+  email     String
+  telefono  String?
+  tipo      String   // "ALUMNO" | "PROFESIONAL"
+  mensaje   String?
+  leida     Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
 model Ausencia {
   id          String   @id @default(cuid())
   userId      String
