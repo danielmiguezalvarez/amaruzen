@@ -83,6 +83,13 @@ export async function GET(req: Request) {
 
   const ahora = new Date();
 
+  console.log("[CAMBIO-DEBUG] sesionOrigenId recibido:", sesionOrigenId);
+  console.log("[CAMBIO-DEBUG] sesionOrigenRealId resuelto:", sesionOrigenRealId);
+  console.log("[CAMBIO-DEBUG] sesionOrigen.claseId:", sesionOrigen.claseId);
+  console.log("[CAMBIO-DEBUG] sesionOrigen.horarioId:", sesionOrigen.horarioId);
+  console.log("[CAMBIO-DEBUG] sesionOrigen.fecha:", sesionOrigen.fecha);
+  console.log("[CAMBIO-DEBUG] ahora:", ahora);
+
   const horariosMismaClase = await prisma.horario.findMany({
     where: {
       claseId: sesionOrigen.claseId,
@@ -114,19 +121,30 @@ export async function GET(req: Request) {
       horario.clase.fechaFin
     );
 
+    console.log(`[CAMBIO-DEBUG] horario ${horario.id} diaSemana=${horario.diaSemana} fecha=${horario.fecha} → fechas generadas:`, fechas.map(f => f.toISOString()));
+
     for (const fecha of fechas) {
-      if (
+      const esOrigen =
         horario.id === sesionOrigen.horarioId &&
-        fecha.getTime() === normalizarFecha(sesionOrigen.fecha).getTime()
-      ) {
+        fecha.getTime() === normalizarFecha(sesionOrigen.fecha).getTime();
+      if (esOrigen) {
+        console.log(`[CAMBIO-DEBUG]   skip: es la sesión origen`);
         continue;
       }
 
       const { sesion } = await materializarSesion(horario.id, fecha);
       const inicio = getInicioSesion(sesion.fecha, sesion.horaInicio);
-      if (inicio <= ahora || sesion.cancelada) continue;
+      if (inicio <= ahora || sesion.cancelada) {
+        console.log(`[CAMBIO-DEBUG]   skip fecha ${fecha.toISOString()}: pasada=${inicio <= ahora} cancelada=${sesion.cancelada}`);
+        continue;
+      }
       const ocupacion = await calcularOcupacionSesion(horario.id, sesion.fecha, sesion.aforo);
-      if (ocupacion.libres <= 0) continue;
+      if (ocupacion.libres <= 0) {
+        console.log(`[CAMBIO-DEBUG]   skip fecha ${fecha.toISOString()}: sin plazas libres (libres=${ocupacion.libres})`);
+        continue;
+      }
+
+      console.log(`[CAMBIO-DEBUG]   AÑADIDA fecha ${fecha.toISOString()} horario ${horario.id}`);
 
       mismaClase.push({
         id: sesion.id,
