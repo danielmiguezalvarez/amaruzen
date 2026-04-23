@@ -154,8 +154,10 @@ export default function CambiosPage() {
                       <span className="font-medium">{c.sesionDestino.clase.nombre}</span>
                     </div>
                     <div className="text-xs text-stone-400 mt-1">
-                      Desde: {new Date(c.sesionOrigen.fecha).toLocaleDateString("es-ES")} {c.sesionOrigen.horaInicio} ·
-                      Hasta: {new Date(c.sesionDestino.fecha).toLocaleDateString("es-ES")} {c.sesionDestino.horaInicio} ·
+                      {new Date(c.sesionOrigen.fecha).toLocaleDateString("es-ES")} {c.sesionOrigen.horaInicio}
+                      {" -> "}
+                      {new Date(c.sesionDestino.fecha).toLocaleDateString("es-ES")} {c.sesionDestino.horaInicio}
+                      {" · "}
                       Solicitado: {new Date(c.createdAt).toLocaleDateString("es-ES")}
                     </div>
                   </div>

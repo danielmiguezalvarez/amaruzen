@@ -43,17 +43,23 @@ export async function GET(req: Request) {
     });
     const sesionesBono = new Set(usosBono.map((u) => u.sesionId));
 
-    const cambiosAprobados = await prisma.cambio.findMany({
-      where: {
-        userId: session.user.id,
-        estado: "APROBADO",
-        OR: [
-          { sesionOrigen: { fecha: { gte: lunes, lte: domingo } } },
-          { sesionDestino: { fecha: { gte: lunes, lte: domingo } } },
-        ],
-      },
-      select: { sesionOrigenId: true, sesionDestinoId: true },
-    });
+    const sesionIdsSemana = sesiones
+      .map((s) => s.sesionId)
+      .filter((id): id is string => Boolean(id));
+
+    const cambiosAprobados = sesionIdsSemana.length
+      ? await prisma.cambio.findMany({
+        where: {
+          userId: session.user.id,
+          estado: "APROBADO",
+          OR: [
+            { sesionOrigenId: { in: sesionIdsSemana } },
+            { sesionDestinoId: { in: sesionIdsSemana } },
+          ],
+        },
+        select: { sesionOrigenId: true, sesionDestinoId: true },
+      })
+      : [];
     const sesionesCambioOrigen = new Set(cambiosAprobados.map((c) => c.sesionOrigenId));
     const sesionesCambioDestino = new Set(cambiosAprobados.map((c) => c.sesionDestinoId));
 
