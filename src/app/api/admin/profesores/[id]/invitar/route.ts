@@ -16,12 +16,16 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return NextResponse.json({ error: "El profesor no tiene email" }, { status: 400 });
     }
 
-    let user = await prisma.user.findUnique({ where: { email: profesor.email } });
+    const emailNorm = profesor.email.trim().toLowerCase();
+
+    let user = await prisma.user.findFirst({
+      where: { email: { equals: emailNorm, mode: "insensitive" } },
+    });
     if (!user) {
       user = await prisma.user.create({
         data: {
           name: profesor.nombre,
-          email: profesor.email,
+          email: emailNorm,
           role: "PROFESIONAL",
           password: null,
           activo: true,
@@ -43,7 +47,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       createdById: auth.session.user.id,
       userId: user.id,
       profesorId: profesor.id,
-      email: profesor.email,
+      email: emailNorm,
       nombre: profesor.nombre,
       role: "PROFESIONAL",
     });

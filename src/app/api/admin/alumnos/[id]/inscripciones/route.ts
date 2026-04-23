@@ -77,32 +77,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
 
   if (modalidadNorm === "SEMANAL") {
-    for (const h of horarios) {
-      const ocupadosBase = await prisma.inscripcionHorario.count({
-        where: {
-          horarioId: h.id,
-          activa: true,
-          inscripcion: {
-            activa: true,
-            user: { activo: true },
-            userId: { not: params.id },
-          },
-        },
-      });
-      const aforoMax = h.aforo || h.clase.aforo;
-      if (ocupadosBase + 1 > aforoMax) {
-        const etiqueta = h.fecha
-          ? `${h.fecha.toISOString().slice(0, 10)} ${h.horaInicio}-${h.horaFin}`
-          : `${h.diaSemana || ""} ${h.horaInicio}-${h.horaFin}`;
-        return NextResponse.json(
-          { error: `Aforo completo en el horario ${etiqueta}` },
-          { status: 409 }
-        );
-      }
-    }
-  }
-
-  if (modalidadNorm === "SEMANAL") {
     const seleccionadosPorDia = new Map<string, Array<{ inicio: string; fin: string }>>();
     for (const h of horarios) {
       const dia = h.fecha ? h.fecha.toISOString().slice(0, 10) : (h.diaSemana || "");

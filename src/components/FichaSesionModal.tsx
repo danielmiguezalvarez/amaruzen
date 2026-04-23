@@ -9,6 +9,7 @@ type Alumno = {
   cambioSaliente?: boolean;
   esInscrito?: boolean;
   esBono?: boolean;
+  bonoDisponible?: boolean;
 };
 
 type Props = {
@@ -22,6 +23,7 @@ type Props = {
   cargando?: boolean;
   onMoverAlumno?: (alumnoId: string) => void;
   onAusenciaAlumno?: (alumnoId: string) => void;
+  onApuntarBono?: (alumnoId: string) => void;
   onCancelarBono?: (alumnoId: string) => void;
   onEliminarSesion?: () => void;
 };
@@ -29,6 +31,7 @@ type Props = {
 function etiquetaEstado(a: Alumno) {
   if (a.cambioSaliente) return { texto: "Movido", clase: "bg-orange-100 text-orange-700" };
   if (a.ausente) return { texto: "Ausente", clase: "bg-amber-100 text-amber-700" };
+  if (a.bonoDisponible) return { texto: "Bono disponible", clase: "bg-violet-100 text-violet-700" };
   if (a.esBono) return { texto: "Bono", clase: "bg-purple-100 text-purple-700" };
   if (a.cambioEntrante && !a.esInscrito) return { texto: "Viene por cambio", clase: "bg-blue-100 text-blue-700" };
   if (a.cambioEntrante && a.esInscrito) return { texto: "Cambio entrante", clase: "bg-blue-100 text-blue-700" };
@@ -46,6 +49,7 @@ export default function FichaSesionModal({
   cargando = false,
   onMoverAlumno,
   onAusenciaAlumno,
+  onApuntarBono,
   onCancelarBono,
   onEliminarSesion,
 }: Props) {
@@ -122,7 +126,7 @@ export default function FichaSesionModal({
                         <p className="text-xs text-stone-500">{a.email}</p>
                       </div>
                       <div className="flex gap-1 flex-wrap justify-end">
-                        {onMoverAlumno && !a.cambioSaliente && !a.esBono && (
+                        {onMoverAlumno && !a.cambioSaliente && !a.esBono && !a.bonoDisponible && (
                           <button
                             type="button"
                             onClick={() => onMoverAlumno(a.id)}
@@ -131,7 +135,7 @@ export default function FichaSesionModal({
                             Mover
                           </button>
                         )}
-                        {onAusenciaAlumno && !a.ausente && !a.cambioSaliente && !a.esBono && a.esInscrito !== false && (
+                        {onAusenciaAlumno && !a.ausente && !a.cambioSaliente && !a.esBono && !a.bonoDisponible && a.esInscrito !== false && (
                           <button
                             type="button"
                             onClick={() => onAusenciaAlumno(a.id)}
@@ -147,6 +151,15 @@ export default function FichaSesionModal({
                             className="px-2 py-1 text-[11px] border border-red-300 text-red-600 rounded hover:bg-red-50"
                           >
                             Cancelar bono
+                          </button>
+                        )}
+                        {onApuntarBono && a.bonoDisponible && (
+                          <button
+                            type="button"
+                            onClick={() => onApuntarBono(a.id)}
+                            className="px-2 py-1 text-[11px] border border-violet-300 text-violet-700 rounded hover:bg-violet-50"
+                          >
+                            Apuntar bono
                           </button>
                         )}
                       </div>

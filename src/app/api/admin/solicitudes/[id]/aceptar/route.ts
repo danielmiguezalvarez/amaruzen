@@ -21,8 +21,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     );
   }
 
+  const emailNorm = solicitud.email.trim().toLowerCase();
+
   // Si ya existe un usuario con ese email, no duplicar
-  const existente = await prisma.user.findUnique({ where: { email: solicitud.email } });
+  const existente = await prisma.user.findFirst({
+    where: { email: { equals: emailNorm, mode: "insensitive" } },
+  });
   if (existente) {
     // Marcar aceptada apuntando al usuario ya existente y enviar invitación de todas formas
     await crearInvitacionAcceso({
@@ -44,12 +48,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   // Crear nuevo usuario alumno
   const alumno = await prisma.user.create({
-    data: {
-      name: solicitud.nombre,
-      email: solicitud.email,
-      role: "ALUMNO",
-      activo: true,
-    },
+      data: {
+        name: solicitud.nombre,
+        email: emailNorm,
+        role: "ALUMNO",
+        activo: true,
+      },
   });
 
   // Enviar invitación de acceso

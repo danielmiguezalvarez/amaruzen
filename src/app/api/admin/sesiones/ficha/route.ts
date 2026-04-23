@@ -122,9 +122,10 @@ export async function GET(req: Request) {
       cambioSaliente: boolean;
       esInscrito: boolean;
       esBono: boolean;
+      bonoDisponible: boolean;
     }>>(Prisma.sql`
       WITH inscritos AS (
-        SELECT u."id", u."name", u."email", true AS "esInscrito", false AS "esBono"
+        SELECT u."id", u."name", u."email", true AS "esInscrito", false AS "esBono", false AS "bonoDisponible"
         FROM "InscripcionHorario" ih
         JOIN "Inscripcion" i ON i."id" = ih."inscripcionId"
         JOIN "User" u ON u."id" = i."userId"
@@ -133,7 +134,7 @@ export async function GET(req: Request) {
           AND i."activa" = true
       ),
       entrantes AS (
-        SELECT DISTINCT u."id", u."name", u."email", false AS "esInscrito", false AS "esBono"
+        SELECT DISTINCT u."id", u."name", u."email", false AS "esInscrito", false AS "esBono", false AS "bonoDisponible"
         FROM "Cambio" c
         JOIN "Sesion" sd ON sd."id" = c."sesionDestinoId"
         JOIN "User" u ON u."id" = c."userId"
@@ -145,7 +146,7 @@ export async function GET(req: Request) {
           )
       ),
       bonos AS (
-        SELECT DISTINCT u."id", u."name", u."email", false AS "esInscrito", true AS "esBono"
+        SELECT DISTINCT u."id", u."name", u."email", false AS "esInscrito", true AS "esBono", false AS "bonoDisponible"
         FROM "UsoBonoSesion" ubs
         JOIN "Sesion" sb ON sb."id" = ubs."sesionId"
         JOIN "User" u ON u."id" = ubs."userId"
@@ -155,12 +156,27 @@ export async function GET(req: Request) {
           AND NOT EXISTS (SELECT 1 FROM inscritos ins WHERE ins."id" = u."id")
           AND NOT EXISTS (SELECT 1 FROM entrantes ent WHERE ent."id" = u."id")
       ),
+      bono_disponibles AS (
+        SELECT DISTINCT u."id", u."name", u."email", false AS "esInscrito", false AS "esBono", true AS "bonoDisponible"
+        FROM "Inscripcion" i
+        JOIN "User" u ON u."id" = i."userId"
+        WHERE i."claseId" = ${sesion.claseId}
+          AND i."activa" = true
+          AND i."modalidad" = 'BONO'
+          AND COALESCE(i."creditosDisponibles", 0) > 0
+          AND u."activo" = true
+          AND NOT EXISTS (SELECT 1 FROM inscritos ins WHERE ins."id" = u."id")
+          AND NOT EXISTS (SELECT 1 FROM entrantes ent WHERE ent."id" = u."id")
+          AND NOT EXISTS (SELECT 1 FROM bonos b WHERE b."id" = u."id")
+      ),
       todos AS (
         SELECT * FROM inscritos
         UNION ALL
         SELECT * FROM entrantes
         UNION ALL
         SELECT * FROM bonos
+        UNION ALL
+        SELECT * FROM bono_disponibles
       )
       SELECT
         t."id",
@@ -168,6 +184,7 @@ export async function GET(req: Request) {
         t."email",
         t."esInscrito",
         t."esBono",
+        t."bonoDisponible",
         EXISTS (
           SELECT 1 FROM "Ausencia" a
           WHERE a."userId" = t."id"

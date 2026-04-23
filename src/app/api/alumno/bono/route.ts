@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { resolverSesionId } from "@/lib/sesiones";
 
 function inicioSesion(fecha: Date, horaInicio: string) {
   const d = new Date(fecha);
@@ -47,7 +48,12 @@ export async function POST(req: Request) {
   const { sesionId } = await req.json();
   if (!sesionId) return NextResponse.json({ error: "Falta sesionId" }, { status: 400 });
 
-  const sesion = await prisma.sesion.findUnique({ where: { id: sesionId } });
+  const sesionRealId = await resolverSesionId(sesionId);
+  if (!sesionRealId) {
+    return NextResponse.json({ error: "Sesión no disponible" }, { status: 404 });
+  }
+
+  const sesion = await prisma.sesion.findUnique({ where: { id: sesionRealId } });
   if (!sesion || sesion.cancelada) {
     return NextResponse.json({ error: "Sesión no disponible" }, { status: 404 });
   }
@@ -134,8 +140,13 @@ export async function DELETE(req: Request) {
   const { sesionId } = await req.json();
   if (!sesionId) return NextResponse.json({ error: "Falta sesionId" }, { status: 400 });
 
+  const sesionRealId = await resolverSesionId(sesionId);
+  if (!sesionRealId) {
+    return NextResponse.json({ error: "Sesión no disponible" }, { status: 404 });
+  }
+
   const uso = await prisma.usoBonoSesion.findUnique({
-    where: { userId_sesionId: { userId: session.user.id, sesionId } },
+    where: { userId_sesionId: { userId: session.user.id, sesionId: sesionRealId } },
     include: { sesion: true },
   });
   if (!uso || !uso.activo) {

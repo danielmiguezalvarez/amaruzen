@@ -25,13 +25,24 @@ export async function POST(req: Request) {
 
   const hashed = await bcrypt.hash(String(password), 12);
 
+  const userByInviteEmail = !invitacion.user
+    ? await prisma.user.findFirst({
+        where: { email: { equals: invitacion.email, mode: "insensitive" } },
+        select: { id: true },
+      })
+    : null;
+
+  if (!invitacion.user && !userByInviteEmail) {
+    return NextResponse.json({ error: "No se encontró el usuario para esta invitación" }, { status: 404 });
+  }
+
   const user = invitacion.user
     ? await prisma.user.update({
         where: { id: invitacion.user.id },
         data: { password: hashed, role: invitacion.role, activo: true },
       })
     : await prisma.user.update({
-        where: { email: invitacion.email },
+        where: { id: userByInviteEmail!.id },
         data: { password: hashed, role: invitacion.role, activo: true },
       });
 

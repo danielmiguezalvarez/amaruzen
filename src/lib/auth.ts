@@ -23,8 +23,10 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+        const emailNorm = credentials.email.trim().toLowerCase();
+
+        const user = await prisma.user.findFirst({
+          where: { email: { equals: emailNorm, mode: "insensitive" } },
         });
 
         if (!user || !user.password) return null;
@@ -51,8 +53,8 @@ export const authOptions: NextAuthOptions = {
       }
       // Compatibilidad con tokens antiguos sin role: solo intenta una vez.
       if (!token.role && token.email && !token.roleChecked) {
-        const dbUser = await prisma.user.findUnique({
-          where: { email: token.email },
+        const dbUser = await prisma.user.findFirst({
+          where: { email: { equals: String(token.email), mode: "insensitive" } },
           select: { role: true, id: true },
         });
         if (dbUser) {

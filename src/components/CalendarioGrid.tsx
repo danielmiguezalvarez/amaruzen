@@ -127,11 +127,17 @@ function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onEliminarEvento
                                   : "bg-stone-100 border-stone-300 text-stone-900";
 
                             const style: React.CSSProperties = {
-                              ...(ev.color && ev.tipo === "CLASE"
+                              ...(ev.color && ev.tipo === "CLASE" && !ev.esInscrito
                                 ? {
                                     backgroundColor: `${ev.color}22`,
                                     borderColor: `${ev.color}99`,
                                     color: "#1f2937",
+                                  }
+                                : {}),
+                              ...(ev.esInscrito
+                                ? {
+                                    borderLeftWidth: "3px",
+                                    borderLeftColor: "#059669",
                                   }
                                 : {}),
                             };

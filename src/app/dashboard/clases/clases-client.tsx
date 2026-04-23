@@ -140,10 +140,19 @@ export default function ClasesClient() {
     setOpciones(null);
     setExito("");
     setLoadingOpciones(true);
-    const res = await fetch(`/api/alumno/sesiones?sesionOrigenId=${sesion.id}`);
-    const data = await res.json();
-    setOpciones(data);
-    setLoadingOpciones(false);
+    try {
+      const res = await fetch(`/api/alumno/sesiones?sesionOrigenId=${sesion.id}`);
+      if (!res.ok) {
+        setOpciones({ mismaClase: [], convenio: [] });
+        return;
+      }
+      const data = await res.json();
+      setOpciones(data);
+    } catch {
+      setOpciones({ mismaClase: [], convenio: [] });
+    } finally {
+      setLoadingOpciones(false);
+    }
   }
 
   async function solicitarCambio(destino: SesionDisponible) {
@@ -311,7 +320,7 @@ export default function ClasesClient() {
                       {!s.esInscrito ? (
                         <button
                           type="button"
-                          onClick={() => reservarConBono(s.id)}
+                          onClick={() => reservarConBono(s.sesionId || s.id)}
                           className="px-3 py-1.5 text-xs rounded border border-stone-300 hover:bg-stone-50"
                         >
                           Apuntarme
@@ -320,7 +329,7 @@ export default function ClasesClient() {
                         <button
                           type="button"
                           disabled={!puedeCancelar}
-                          onClick={() => cancelarConBono(s.id)}
+                          onClick={() => cancelarConBono(s.sesionId || s.id)}
                           className="px-3 py-1.5 text-xs rounded border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-50"
                           title={!puedeCancelar ? "Solo puedes cancelar con al menos 2 horas de antelación" : undefined}
                         >

@@ -51,9 +51,11 @@ export default function CalendarioLista({ lunes, eventos, onClickEvento, onElimi
                       : ev.esInscrito
                         ? "bg-emerald-100 text-emerald-700"
                         : "bg-stone-100 text-stone-600";
-                  const stripe = ev.color && ev.tipo === "CLASE"
-                    ? { borderLeft: `3px solid ${ev.color}` }
-                    : undefined;
+                  const stripe = ev.esInscrito
+                    ? { borderLeft: "4px solid #059669" }
+                    : ev.color && ev.tipo === "CLASE"
+                      ? { borderLeft: `3px solid ${ev.color}` }
+                      : undefined;
                   return (
                     <div key={ev.id} className="w-full px-3 py-2 hover:bg-stone-50 transition-colors" style={stripe}>
                       <div className="flex items-start justify-between gap-2">
@@ -65,6 +67,9 @@ export default function CalendarioLista({ lunes, eventos, onClickEvento, onElimi
                           <p className="text-xs font-semibold text-stone-800 truncate">{ev.titulo}</p>
                           <p className="text-xs text-stone-500 truncate">{ev.horaInicio} - {ev.horaFin}</p>
                           <p className="text-xs text-stone-400 truncate">{ev.salaNombre}</p>
+                          {ev.tipo === "CLASE" && ev.esInscrito && (
+                            <p className="text-[10px] text-emerald-700 font-medium">Inscrito</p>
+                          )}
                         </button>
                         <div className="flex items-center gap-2">
                           <span className={`px-1.5 py-0.5 text-[10px] rounded ${badge}`}>

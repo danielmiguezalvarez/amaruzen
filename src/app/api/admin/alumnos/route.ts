@@ -56,13 +56,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Nombre y email son obligatorios" }, { status: 400 });
   }
 
-  const existe = await prisma.user.findUnique({ where: { email } });
+  const emailNorm = String(email).trim().toLowerCase();
+
+  const existe = await prisma.user.findFirst({
+    where: { email: { equals: emailNorm, mode: "insensitive" } },
+  });
   if (existe) return NextResponse.json({ error: "Ya existe un usuario con ese email" }, { status: 409 });
 
   const hashedPassword = password ? await bcrypt.hash(password, 12) : null;
 
   const alumno = await prisma.user.create({
-    data: { name: nombre, email, password: hashedPassword, role: "ALUMNO" },
+    data: { name: nombre, email: emailNorm, password: hashedPassword, role: "ALUMNO" },
   });
   return NextResponse.json(alumno, { status: 201 });
 }
