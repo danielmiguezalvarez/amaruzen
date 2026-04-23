@@ -43,7 +43,23 @@ export async function GET(req: Request) {
     });
     const sesionesBono = new Set(usosBono.map((u) => u.sesionId));
 
+    const cambiosAprobados = await prisma.cambio.findMany({
+      where: {
+        userId: session.user.id,
+        estado: "APROBADO",
+        OR: [
+          { sesionOrigen: { fecha: { gte: lunes, lte: domingo } } },
+          { sesionDestino: { fecha: { gte: lunes, lte: domingo } } },
+        ],
+      },
+      select: { sesionOrigenId: true, sesionDestinoId: true },
+    });
+    const sesionesCambioOrigen = new Set(cambiosAprobados.map((c) => c.sesionOrigenId));
+    const sesionesCambioDestino = new Set(cambiosAprobados.map((c) => c.sesionDestinoId));
+
     const sesionesConFlag = sesiones.map((s) => ({
+      cambioEntrante: s.sesionId ? sesionesCambioDestino.has(s.sesionId) : false,
+      cambioSaliente: s.sesionId ? sesionesCambioOrigen.has(s.sesionId) : false,
       id: s.sesionId || `${s.horarioId}__${s.fecha.toISOString().slice(0, 10)}`,
       sesionId: s.sesionId,
       horarioId: s.horarioId,
@@ -53,7 +69,10 @@ export async function GET(req: Request) {
       horaFin: s.horaFin,
       aforo: s.aforo,
       cancelada: s.cancelada,
-      esInscrito: horariosPropios.has(s.horarioId) || (s.sesionId ? sesionesBono.has(s.sesionId) : false),
+      esInscrito:
+        ((horariosPropios.has(s.horarioId) || (s.sesionId ? sesionesCambioDestino.has(s.sesionId) : false))
+          && !(s.sesionId ? sesionesCambioOrigen.has(s.sesionId) : false))
+        || (s.sesionId ? sesionesBono.has(s.sesionId) : false),
       esBono: s.sesionId ? sesionesBono.has(s.sesionId) : false,
       clase: s.clase,
     }));
