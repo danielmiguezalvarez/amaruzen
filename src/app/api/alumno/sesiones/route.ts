@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 import {
-  calcularOcupacionesBatch,
+  calcularOcupacionSesion,
   getLunes,
   getDomingo,
   generarSesionesPorRango,
   normalizarFecha,
-  keySesion,
   resolverSesionId,
 } from "@/lib/sesiones";
 
@@ -213,17 +213,99 @@ export async function GET(req: Request) {
       }
     }
 
-    const ocupacion = await calcularOcupacionesBatch([
-      ...mismaClaseCand.map((s) => ({ horarioId: s.horarioId, fecha: s.fecha, aforo: s.aforo })),
-      ...convenioCand.map((s) => ({ horarioId: s.horarioId, fecha: s.fecha, aforo: s.aforo })),
-    ]);
+    const candidatos = [...mismaClaseCand, ...convenioCand];
+    const aforoPorSesion = new Map(candidatos.map((s) => [s.id, s.aforo]));
+    const objetivosSesion = Array.from(new Set(candidatos.map((s) => s.id)));
+
+    const rowsOcupacion = objetivosSesion.length
+      ? await prisma.$queryRaw<Array<{
+        sesionId: string;
+        inscritos: bigint;
+        ausencias: bigint;
+        cambiosEntrantes: bigint;
+        cambiosSalientes: bigint;
+        bonos: bigint;
+      }>>(Prisma.sql`
+WITH objetivo ("sesionId") AS (
+  VALUES ${Prisma.join(objetivosSesion.map((id) => Prisma.sql`(${id}::text)`))}
+)
+SELECT
+  o."sesionId",
+  (
+    SELECT COUNT(*)
+    FROM "InscripcionHorario" ih
+    JOIN "Inscripcion" i ON i."id" = ih."inscripcionId"
+    JOIN "Sesion" s ON s."id" = o."sesionId"
+    WHERE ih."horarioId" = s."horarioId"
+      AND ih."activa" = true
+      AND i."activa" = true
+  ) AS "inscritos",
+  (
+    SELECT COUNT(*)
+    FROM "Ausencia" a
+    JOIN "Sesion" s ON s."id" = o."sesionId"
+    WHERE a."horarioId" = s."horarioId"
+      AND a."fecha" = s."fecha"
+  ) AS "ausencias",
+  (
+    SELECT COUNT(*)
+    FROM "Cambio" c
+    WHERE c."estado" IN ('PENDIENTE', 'APROBADO')
+      AND c."sesionDestinoId" = o."sesionId"
+  ) AS "cambiosEntrantes",
+  (
+    SELECT COUNT(*)
+    FROM "Cambio" c
+    WHERE c."estado" IN ('PENDIENTE', 'APROBADO')
+      AND c."sesionOrigenId" = o."sesionId"
+  ) AS "cambiosSalientes",
+  (
+    SELECT COUNT(*)
+    FROM "UsoBonoSesion" u
+    JOIN "Inscripcion" ib ON ib."id" = u."inscripcionId"
+    JOIN "User" uu ON uu."id" = u."userId"
+    WHERE u."sesionId" = o."sesionId"
+      AND u."activo" = true
+      AND ib."activa" = true
+      AND uu."activo" = true
+  ) AS "bonos"
+FROM objetivo o
+`)
+      : [];
+
+    const libresPorSesion = new Map<string, number>();
+    for (const r of rowsOcupacion) {
+      const inscritos = Number(r.inscritos);
+      const ausencias = Number(r.ausencias);
+      const cambiosEntrantes = Number(r.cambiosEntrantes);
+      const cambiosSalientes = Number(r.cambiosSalientes);
+      const bonos = Number(r.bonos);
+      const ocupados = inscritos - ausencias + cambiosEntrantes - cambiosSalientes + bonos;
+      const aforo = aforoPorSesion.get(r.sesionId) ?? 0;
+      libresPorSesion.set(r.sesionId, aforo - ocupados);
+    }
+
+    let fallbackOcupacion = false;
+    if (candidatos.length > 0) {
+      const hayAlgunaConHueco = candidatos.some((s) => (libresPorSesion.get(s.id) ?? s.aforo) > 0);
+      if (!hayAlgunaConHueco) {
+        fallbackOcupacion = true;
+        const recalculo = await Promise.all(
+          candidatos.map(async (s) => {
+            const occ = await calcularOcupacionSesion(s.horarioId, s.fecha, s.aforo);
+            return { id: s.id, libres: occ.libres };
+          })
+        );
+        for (const r of recalculo) libresPorSesion.set(r.id, r.libres);
+      }
+    }
 
     let missingOccMismaClase = 0;
     const mismaClase = mismaClaseCand
       .filter((s) => {
-        const occ = ocupacion.get(keySesion(s.horarioId, s.fecha));
-        if (!occ) missingOccMismaClase += 1;
-        return (occ?.libres ?? s.aforo) > 0;
+        const libres = libresPorSesion.get(s.id);
+        if (typeof libres !== "number") missingOccMismaClase += 1;
+        return (libres ?? s.aforo) > 0;
       })
       .map(({ id, fecha, horaInicio, horaFin, clase, tipoConvenio }) => ({
         id,
@@ -237,9 +319,9 @@ export async function GET(req: Request) {
     let missingOccConvenio = 0;
     const convenio = convenioCand
       .filter((s) => {
-        const occ = ocupacion.get(keySesion(s.horarioId, s.fecha));
-        if (!occ) missingOccConvenio += 1;
-        return (occ?.libres ?? s.aforo) > 0;
+        const libres = libresPorSesion.get(s.id);
+        if (typeof libres !== "number") missingOccConvenio += 1;
+        return (libres ?? s.aforo) > 0;
       })
       .map(({ id, fecha, horaInicio, horaFin, clase, tipoConvenio, convenioId, requiereAprobacion }) => ({
         id,
@@ -275,6 +357,7 @@ export async function GET(req: Request) {
         candidatosConvenio: convenioCand.length,
         missingOccMismaClase,
         missingOccConvenio,
+        fallbackOcupacion,
         resultadoMismaClase: payload.mismaClase.length,
         resultadoConvenio: payload.convenio.length,
       };
