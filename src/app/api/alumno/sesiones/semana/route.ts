@@ -43,25 +43,21 @@ export async function GET(req: Request) {
     });
     const sesionesBono = new Set(usosBono.map((u) => u.sesionId));
 
-    const sesionIdsSemana = sesiones
-      .map((s) => s.sesionId)
-      .filter((id): id is string => Boolean(id));
-
-    const cambiosAprobados = sesionIdsSemana.length
-      ? await prisma.cambio.findMany({
-        where: {
-          userId: session.user.id,
-          estado: "APROBADO",
-          OR: [
-            { sesionOrigenId: { in: sesionIdsSemana } },
-            { sesionDestinoId: { in: sesionIdsSemana } },
-          ],
-        },
-        select: { sesionOrigenId: true, sesionDestinoId: true },
-      })
-      : [];
-    const sesionesCambioOrigen = new Set(cambiosAprobados.map((c) => c.sesionOrigenId));
-    const sesionesCambioDestino = new Set(cambiosAprobados.map((c) => c.sesionDestinoId));
+    // Traemos TODOS los cambios aprobados del usuario sin filtrar por semana.
+    // Así detectamos tanto origen como destino aunque estén en semanas distintas.
+    const cambiosAprobados = await prisma.cambio.findMany({
+      where: {
+        userId: session.user.id,
+        estado: "APROBADO",
+      },
+      select: { sesionOrigenId: true, sesionDestinoId: true },
+    });
+    const sesionesCambioOrigen = new Set(
+      cambiosAprobados.map((c) => c.sesionOrigenId).filter(Boolean) as string[]
+    );
+    const sesionesCambioDestino = new Set(
+      cambiosAprobados.map((c) => c.sesionDestinoId).filter(Boolean) as string[]
+    );
 
     const sesionesConFlag = sesiones.map((s) => ({
       cambioEntrante: s.sesionId ? sesionesCambioDestino.has(s.sesionId) : false,

@@ -22,20 +22,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { data: session } = useSession();
   const pathname = usePathname();
   const [solicitudesSinLeer, setSolicitudesSinLeer] = useState(0);
+  const [cambiosPendientes, setCambiosPendientes] = useState(0);
 
   useEffect(() => {
-    async function cargarBadge() {
+    async function cargarBadges() {
       try {
-        const res = await fetch("/api/admin/solicitudes");
-        if (res.ok) {
-          const data: Array<{ estado: string }> = await res.json();
+        const [resSol, resCam] = await Promise.all([
+          fetch("/api/admin/solicitudes"),
+          fetch("/api/admin/cambios/badge"),
+        ]);
+        if (resSol.ok) {
+          const data: Array<{ estado: string }> = await resSol.json();
           setSolicitudesSinLeer(data.filter((s) => s.estado === "PENDIENTE").length);
+        }
+        if (resCam.ok) {
+          const data: { count: number } = await resCam.json();
+          setCambiosPendientes(data.count);
         }
       } catch {
         // silenciar — no bloquear el layout
       }
     }
-    cargarBadge();
+    cargarBadges();
   }, [pathname]); // re-fetch al navegar
 
   return (
@@ -67,6 +75,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="max-w-7xl mx-auto px-4 flex">
             {navItems.map((item) => {
               const esSolicitudes = item.href === "/admin/solicitudes";
+              const esCambios = item.href === "/admin/cambios";
+              const badgeCount = esSolicitudes ? solicitudesSinLeer : esCambios ? cambiosPendientes : 0;
               return (
                 <Link
                   key={item.href}
@@ -78,9 +88,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   }`}
                 >
                   {item.label}
-                  {esSolicitudes && solicitudesSinLeer > 0 && (
+                  {badgeCount > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-400 text-stone-900 text-[10px] font-bold flex items-center justify-center leading-none">
-                      {solicitudesSinLeer > 9 ? "9+" : solicitudesSinLeer}
+                      {badgeCount > 9 ? "9+" : badgeCount}
                     </span>
                   )}
                 </Link>

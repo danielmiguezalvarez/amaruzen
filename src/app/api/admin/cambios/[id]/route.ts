@@ -19,8 +19,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     },
   });
 
-  // Enviar email de notificación
-  if (cambio.user.email) {
+  // Enviar email de notificación solo si el alumno tiene las notificaciones activadas
+  if (cambio.user.email && cambio.user.notificaciones) {
     if (estado === "APROBADO") {
       await sendCambioAprobado({
         to: cambio.user.email,
