@@ -8,6 +8,7 @@ import {
   getDomingo,
   generarSesionesPorRango,
   normalizarFecha,
+  keySesion,
   resolverSesionId,
 } from "@/lib/sesiones";
 
@@ -18,10 +19,6 @@ function getInicioSesion(fecha: Date, horaInicio: string) {
   return inicio;
 }
 
-function occKey(horarioId: string, fecha: Date) {
-  return `${horarioId}__${normalizarFecha(fecha).toISOString().slice(0, 10)}`;
-}
-
 export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -29,6 +26,7 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const sesionOrigenId = searchParams.get("sesionOrigenId");
+    const debug = searchParams.get("debug") === "1";
     if (!sesionOrigenId) return NextResponse.json({ error: "Falta sesionOrigenId" }, { status: 400 });
 
     const sesionOrigenRealId = await resolverSesionId(sesionOrigenId);
@@ -220,8 +218,13 @@ export async function GET(req: Request) {
       ...convenioCand.map((s) => ({ horarioId: s.horarioId, fecha: s.fecha, aforo: s.aforo })),
     ]);
 
+    let missingOccMismaClase = 0;
     const mismaClase = mismaClaseCand
-      .filter((s) => (ocupacion.get(occKey(s.horarioId, s.fecha))?.libres ?? 0) > 0)
+      .filter((s) => {
+        const occ = ocupacion.get(keySesion(s.horarioId, s.fecha));
+        if (!occ) missingOccMismaClase += 1;
+        return (occ?.libres ?? s.aforo) > 0;
+      })
       .map(({ id, fecha, horaInicio, horaFin, clase, tipoConvenio }) => ({
         id,
         fecha,
@@ -231,8 +234,13 @@ export async function GET(req: Request) {
         tipoConvenio,
       }));
 
+    let missingOccConvenio = 0;
     const convenio = convenioCand
-      .filter((s) => (ocupacion.get(occKey(s.horarioId, s.fecha))?.libres ?? 0) > 0)
+      .filter((s) => {
+        const occ = ocupacion.get(keySesion(s.horarioId, s.fecha));
+        if (!occ) missingOccConvenio += 1;
+        return (occ?.libres ?? s.aforo) > 0;
+      })
       .map(({ id, fecha, horaInicio, horaFin, clase, tipoConvenio, convenioId, requiereAprobacion }) => ({
         id,
         fecha,
@@ -244,14 +252,35 @@ export async function GET(req: Request) {
         requiereAprobacion,
       }));
 
-    return NextResponse.json({
-      mismaClase: mismaClase
+    const mismaClaseUnica = Array.from(new Map(mismaClase.map((s) => [s.id, s])).values());
+    const convenioUnico = Array.from(new Map(convenio.map((s) => [s.id, s])).values());
+
+    const payload: {
+      mismaClase: typeof mismaClaseUnica;
+      convenio: typeof convenioUnico;
+      _debug?: Record<string, unknown>;
+    } = {
+      mismaClase: mismaClaseUnica
         .sort((a, b) => a.fecha.getTime() - b.fecha.getTime())
         .slice(0, 10),
-      convenio: convenio
+      convenio: convenioUnico
         .sort((a, b) => a.fecha.getTime() - b.fecha.getTime())
         .slice(0, 12),
-    });
+    };
+
+    if (debug) {
+      payload._debug = {
+        horariosMismaClase: horariosMismaClase.length,
+        candidatosMismaClase: mismaClaseCand.length,
+        candidatosConvenio: convenioCand.length,
+        missingOccMismaClase,
+        missingOccConvenio,
+        resultadoMismaClase: payload.mismaClase.length,
+        resultadoConvenio: payload.convenio.length,
+      };
+    }
+
+    return NextResponse.json(payload);
   } catch (err) {
     console.error("[ERROR] /api/alumno/sesiones GET", err);
     return NextResponse.json(
