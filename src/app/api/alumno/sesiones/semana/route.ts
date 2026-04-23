@@ -79,12 +79,28 @@ export async function GET(req: Request) {
       clase: s.clase,
     }));
 
+    // DEBUG TEMPORAL — eliminar tras confirmar
+    const debug = sesionesConFlag
+      .filter((s) => s.esInscrito || s.cambioEntrante || s.cambioSaliente)
+      .map((s) => ({
+        id: s.id,
+        sesionId: s.sesionId,
+        clase: s.clase.nombre,
+        fecha: new Date(s.fecha).toISOString().slice(0, 10),
+        hora: s.horaInicio,
+        esInscrito: s.esInscrito,
+        cambioEntrante: s.cambioEntrante,
+        cambioSaliente: s.cambioSaliente,
+      }));
+    console.log("[semana debug]", JSON.stringify({ userId: session.user.id, lunes: lunes.toISOString().slice(0,10), debug }));
+
     return NextResponse.json({
       lunes: lunes.toISOString(),
       domingo: domingo.toISOString(),
       salas,
       sesiones: sesionesConFlag,
       reservas,
+      _debug: debug,
     });
   } catch (err) {
     console.error("[ERROR] /api/alumno/sesiones/semana", err);
