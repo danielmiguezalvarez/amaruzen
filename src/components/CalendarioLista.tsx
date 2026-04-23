@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { buildWeekDays, toLocalYMD } from "@/components/calendario-utils";
 import type { EventoCalendario } from "@/components/calendario-types";
 
@@ -43,19 +44,37 @@ export default function CalendarioLista({ lunes, eventos, onClickEvento, onElimi
               {lista.length === 0 ? (
                 <p className="px-3 py-4 text-xs text-stone-300 text-center">Sin eventos</p>
               ) : (
-                lista.map((ev) => {
-                  const badge = ev.tipo === "RESERVA"
-                    ? "bg-blue-100 text-blue-700"
-                    : ev.cancelada
-                      ? "bg-red-100 text-red-700"
-                      : ev.esInscrito
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-stone-100 text-stone-600";
-                  const stripe = ev.esInscrito
-                    ? { borderLeft: "4px solid #059669" }
-                    : ev.color && ev.tipo === "CLASE"
-                      ? { borderLeft: `3px solid ${ev.color}` }
-                      : undefined;
+                  lista.map((ev) => {
+                    // Colores por prioridad: inscrito > bono > color propio > gris
+                    let badge: string;
+                    let stripe: React.CSSProperties | undefined;
+
+                    if (ev.tipo === "RESERVA") {
+                      badge = "bg-blue-100 text-blue-700";
+                      stripe = undefined;
+                    } else if (ev.cancelada) {
+                      badge = "bg-red-100 text-red-700";
+                      stripe = undefined;
+                    } else if (ev.esInscrito) {
+                      badge = "bg-emerald-100 text-emerald-700";
+                      stripe = { borderLeft: "4px solid #059669" };
+                    } else if (ev.tieneBono) {
+                      badge = "bg-violet-100 text-violet-700";
+                      stripe = { borderLeft: "4px solid #7c3aed" };
+                    } else if (ev.color && ev.tipo === "CLASE") {
+                      badge = "bg-stone-100 text-stone-600";
+                      stripe = { borderLeft: `3px solid ${ev.color}` };
+                    } else {
+                      badge = "bg-stone-100 text-stone-400";
+                      stripe = undefined;
+                    }
+
+                    const etiqueta = ev.tipo === "RESERVA"
+                      ? "Reserva"
+                      : ev.cancelada ? "Cancelada"
+                      : ev.esInscrito ? "Inscrito"
+                      : ev.tieneBono ? "Bono"
+                      : "Clase";
                   return (
                     <div key={ev.id} className="w-full px-3 py-2 hover:bg-stone-50 transition-colors" style={stripe}>
                       <div className="flex items-start justify-between gap-2">
@@ -70,10 +89,13 @@ export default function CalendarioLista({ lunes, eventos, onClickEvento, onElimi
                           {ev.tipo === "CLASE" && ev.esInscrito && (
                             <p className="text-[10px] text-emerald-700 font-medium">Inscrito</p>
                           )}
+                          {ev.tipo === "CLASE" && !ev.esInscrito && ev.tieneBono && (
+                            <p className="text-[10px] text-violet-700 font-medium">Puedes apuntarte con bono</p>
+                          )}
                         </button>
                         <div className="flex items-center gap-2">
                           <span className={`px-1.5 py-0.5 text-[10px] rounded ${badge}`}>
-                            {ev.tipo === "RESERVA" ? "Reserva" : "Clase"}
+                            {etiqueta}
                           </span>
                           {onEliminarEvento && ev.tipo === "CLASE" && (
                             <button

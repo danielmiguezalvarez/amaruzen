@@ -12,6 +12,7 @@ export type EventoCalendario = {
   subtitulo?: string;
   cancelada?: boolean;
   esInscrito?: boolean;
+  tieneBono?: boolean;
   color?: string | null;
   raw: unknown;
 };

@@ -118,29 +118,29 @@ function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onEliminarEvento
                           {eventosSala.map((ev) => {
                             const top = (horaToDecimal(ev.horaInicio) - START_HOUR) * PX_PER_HOUR;
                             const height = Math.max((horaToDecimal(ev.horaFin) - horaToDecimal(ev.horaInicio)) * PX_PER_HOUR, 20);
-                            const baseClass = ev.tipo === "RESERVA"
-                              ? "bg-blue-100 border-blue-300 text-blue-900"
-                              : ev.cancelada
-                                ? "bg-red-100 border-red-300 text-red-900"
-                                : ev.esInscrito
-                                  ? "bg-emerald-100 border-emerald-300 text-emerald-900"
-                                  : "bg-stone-100 border-stone-300 text-stone-900";
+                            // Colores por prioridad: inscrito > bono > color propio > gris
+                            let baseClass: string;
+                            let style: React.CSSProperties = {};
 
-                            const style: React.CSSProperties = {
-                              ...(ev.color && ev.tipo === "CLASE" && !ev.esInscrito
-                                ? {
-                                    backgroundColor: `${ev.color}22`,
-                                    borderColor: `${ev.color}99`,
-                                    color: "#1f2937",
-                                  }
-                                : {}),
-                              ...(ev.esInscrito
-                                ? {
-                                    borderLeftWidth: "3px",
-                                    borderLeftColor: "#059669",
-                                  }
-                                : {}),
-                            };
+                            if (ev.tipo === "RESERVA") {
+                              baseClass = "bg-blue-100 border-blue-300 text-blue-900";
+                            } else if (ev.cancelada) {
+                              baseClass = "bg-red-100 border-red-300 text-red-900 opacity-60";
+                            } else if (ev.esInscrito) {
+                              baseClass = "bg-emerald-100 border-emerald-400 text-emerald-900";
+                              style = { borderLeftWidth: "3px", borderLeftColor: "#059669" };
+                            } else if (ev.tieneBono) {
+                              baseClass = "bg-violet-100 border-violet-400 text-violet-900";
+                              style = { borderLeftWidth: "3px", borderLeftColor: "#7c3aed" };
+                            } else if (ev.color && ev.tipo === "CLASE") {
+                              baseClass = "border text-stone-900";
+                              style = {
+                                backgroundColor: `${ev.color}22`,
+                                borderColor: `${ev.color}88`,
+                              };
+                            } else {
+                              baseClass = "bg-stone-100 border-stone-300 text-stone-500";
+                            }
 
                             return (
                               <div key={ev.id} className="absolute left-1 right-1 z-[2]" style={{ top: `${top}px`, height: `${height}px` }}>
@@ -150,13 +150,13 @@ function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onEliminarEvento
                                     e.stopPropagation();
                                     onClickEvento?.(ev);
                                   }}
-                                  className={`w-full h-full rounded border px-1 py-0.5 text-left shadow-sm overflow-hidden ${baseClass}`}
+                                  className={`w-full h-full rounded border px-1.5 py-1 text-left shadow-sm overflow-hidden ${baseClass}`}
                                   style={style}
                                   title={`${ev.titulo} ${ev.horaInicio}-${ev.horaFin}`}
                                 >
-                                  <p className="text-[10px] font-semibold leading-tight truncate">{ev.titulo}</p>
-                                  <p className="text-[10px] leading-tight opacity-80 truncate">{ev.horaInicio}-{ev.horaFin}</p>
-                                  {ev.subtitulo && <p className="text-[10px] leading-tight opacity-75 truncate">{ev.subtitulo}</p>}
+                                  <p className="text-[11px] font-semibold leading-snug truncate">{ev.titulo}</p>
+                                  <p className="text-[10px] leading-snug opacity-75 truncate">{ev.horaInicio}–{ev.horaFin}</p>
+                                  {ev.subtitulo && <p className="text-[10px] leading-snug opacity-60 truncate">{ev.subtitulo}</p>}
                                 </button>
                                 {onEliminarEvento && ev.tipo === "CLASE" && (
                                   <button
