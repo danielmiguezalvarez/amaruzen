@@ -21,6 +21,7 @@ const ESTADO_COLORS: Record<string, string> = {
 export default function CambiosPage() {
   const [cambios, setCambios] = useState<Cambio[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<"TODOS" | "PENDIENTE" | "APROBADO" | "RECHAZADO">("PENDIENTE");
   const [query, setQuery] = useState("");
   const [desde, setDesde] = useState("");
@@ -33,6 +34,25 @@ export default function CambiosPage() {
   }
 
   useEffect(() => { cargar(); }, []);
+
+  async function actualizarEstado(id: string, estado: "APROBADO" | "RECHAZADO") {
+    setUpdatingId(id);
+    try {
+      const res = await fetch(`/api/admin/cambios/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estado }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || "No se pudo actualizar el estado del cambio");
+        return;
+      }
+      await cargar();
+    } finally {
+      setUpdatingId(null);
+    }
+  }
 
   const cambiosFiltrados = cambios.filter((c) => {
     if (filtro !== "TODOS" && c.estado !== filtro) return false;
@@ -139,12 +159,32 @@ export default function CambiosPage() {
                       Solicitado: {new Date(c.createdAt).toLocaleDateString("es-ES")}
                     </div>
                   </div>
-                   <div className="text-xs text-stone-400 shrink-0">
-                     #{c.id.slice(0, 8)}
-                   </div>
-                 </div>
-               </div>
-             ))
+                  <div className="shrink-0 flex flex-col items-end gap-2">
+                    <div className="text-xs text-stone-400">#{c.id.slice(0, 8)}</div>
+                    {c.estado === "PENDIENTE" && (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={updatingId === c.id}
+                          onClick={() => actualizarEstado(c.id, "APROBADO")}
+                          className="px-2.5 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          Aprobar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={updatingId === c.id}
+                          onClick={() => actualizarEstado(c.id, "RECHAZADO")}
+                          className="px-2.5 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                        >
+                          Rechazar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  </div>
+                </div>
+              ))
           )}
         </div>
       )}

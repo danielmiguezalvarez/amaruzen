@@ -26,7 +26,6 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const sesionOrigenId = searchParams.get("sesionOrigenId");
-    const debug = searchParams.get("debug") === "1";
     if (!sesionOrigenId) return NextResponse.json({ error: "Falta sesionOrigenId" }, { status: 400 });
 
     const sesionOrigenRealId = await resolverSesionId(sesionOrigenId);
@@ -285,11 +284,9 @@ FROM objetivo o
       libresPorSesion.set(r.sesionId, aforo - ocupados);
     }
 
-    let fallbackOcupacion = false;
     if (candidatos.length > 0) {
       const hayAlgunaConHueco = candidatos.some((s) => (libresPorSesion.get(s.id) ?? s.aforo) > 0);
       if (!hayAlgunaConHueco) {
-        fallbackOcupacion = true;
         const recalculo = await Promise.all(
           candidatos.map(async (s) => {
             const occ = await calcularOcupacionSesion(s.horarioId, s.fecha, s.aforo);
@@ -300,11 +297,9 @@ FROM objetivo o
       }
     }
 
-    let missingOccMismaClase = 0;
     const mismaClase = mismaClaseCand
       .filter((s) => {
         const libres = libresPorSesion.get(s.id);
-        if (typeof libres !== "number") missingOccMismaClase += 1;
         return (libres ?? s.aforo) > 0;
       })
       .map(({ id, fecha, horaInicio, horaFin, clase, tipoConvenio }) => ({
@@ -316,11 +311,9 @@ FROM objetivo o
         tipoConvenio,
       }));
 
-    let missingOccConvenio = 0;
     const convenio = convenioCand
       .filter((s) => {
         const libres = libresPorSesion.get(s.id);
-        if (typeof libres !== "number") missingOccConvenio += 1;
         return (libres ?? s.aforo) > 0;
       })
       .map(({ id, fecha, horaInicio, horaFin, clase, tipoConvenio, convenioId, requiereAprobacion }) => ({
@@ -337,11 +330,7 @@ FROM objetivo o
     const mismaClaseUnica = Array.from(new Map(mismaClase.map((s) => [s.id, s])).values());
     const convenioUnico = Array.from(new Map(convenio.map((s) => [s.id, s])).values());
 
-    const payload: {
-      mismaClase: typeof mismaClaseUnica;
-      convenio: typeof convenioUnico;
-      _debug?: Record<string, unknown>;
-    } = {
+    const payload = {
       mismaClase: mismaClaseUnica
         .sort((a, b) => a.fecha.getTime() - b.fecha.getTime())
         .slice(0, 10),
@@ -349,19 +338,6 @@ FROM objetivo o
         .sort((a, b) => a.fecha.getTime() - b.fecha.getTime())
         .slice(0, 12),
     };
-
-    if (debug) {
-      payload._debug = {
-        horariosMismaClase: horariosMismaClase.length,
-        candidatosMismaClase: mismaClaseCand.length,
-        candidatosConvenio: convenioCand.length,
-        missingOccMismaClase,
-        missingOccConvenio,
-        fallbackOcupacion,
-        resultadoMismaClase: payload.mismaClase.length,
-        resultadoConvenio: payload.convenio.length,
-      };
-    }
 
     return NextResponse.json(payload);
   } catch (err) {
