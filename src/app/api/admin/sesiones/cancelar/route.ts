@@ -125,20 +125,24 @@ export async function POST(req: Request) {
 
     await generarSesionesPorRango(inicio, fin);
 
-    let total = 0;
-    for (const f of fechas) {
-      if (horario.clase.fechaInicio && f < normalizarFecha(horario.clase.fechaInicio)) continue;
-      if (horario.clase.fechaFin && f > normalizarFecha(horario.clase.fechaFin)) continue;
+    const fechasValidas = fechas.filter((f) => {
+      if (horario.clase.fechaInicio && f < normalizarFecha(horario.clase.fechaInicio)) return false;
+      if (horario.clase.fechaFin && f > normalizarFecha(horario.clase.fechaFin)) return false;
+      return true;
+    });
 
+    if (fechasValidas.length > 0) {
       await prisma.sesion.updateMany({
-        where: { horarioId, fecha: f },
+        where: { horarioId, fecha: { in: fechasValidas } },
         data: { cancelada: true },
       });
-      await notificarCancelacion(horarioId, f);
-      total++;
     }
 
-    return NextResponse.json({ ok: true, scope: "rango", total });
+    for (const f of fechasValidas) {
+      await notificarCancelacion(horarioId, f);
+    }
+
+    return NextResponse.json({ ok: true, scope: "rango", total: fechasValidas.length });
   }
 
   if (!horarioIdBody && inicio && fin) {
@@ -153,17 +157,20 @@ export async function POST(req: Request) {
       select: { horarioId: true, fecha: true },
     });
 
-    let total = 0;
+    await prisma.sesion.updateMany({
+      where: {
+        fecha: { gte: inicio, lte: fin },
+        clase: { activa: true },
+        horario: { activo: true },
+      },
+      data: { cancelada: true },
+    });
+
     for (const s of sesiones) {
-      await prisma.sesion.updateMany({
-        where: { horarioId: s.horarioId, fecha: s.fecha },
-        data: { cancelada: true },
-      });
       await notificarCancelacion(s.horarioId, s.fecha);
-      total++;
     }
 
-    return NextResponse.json({ ok: true, scope: "cierre_total", total });
+    return NextResponse.json({ ok: true, scope: "cierre_total", total: sesiones.length });
   }
 
   return NextResponse.json({ error: "Parámetros inválidos" }, { status: 400 });

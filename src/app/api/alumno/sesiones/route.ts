@@ -3,22 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import {
-  calcularOcupacionSesion,
-  materializarSesion,
+  calcularOcupacionesBatch,
+  getLunes,
+  getDomingo,
+  generarSesionesPorRango,
   normalizarFecha,
   resolverSesionId,
 } from "@/lib/sesiones";
-import type { DiaSemana } from "@prisma/client";
-
-const DIA_A_JS: Record<DiaSemana, number> = {
-  DOMINGO: 0,
-  LUNES: 1,
-  MARTES: 2,
-  MIERCOLES: 3,
-  JUEVES: 4,
-  VIERNES: 5,
-  SABADO: 6,
-};
 
 function getInicioSesion(fecha: Date, horaInicio: string) {
   const inicio = new Date(fecha);
@@ -27,36 +18,8 @@ function getInicioSesion(fecha: Date, horaInicio: string) {
   return inicio;
 }
 
-function siguientesFechasHorario(
-  diaSemana: DiaSemana | null,
-  fechaPuntual: Date | null,
-  desde: Date,
-  limite: number,
-  fechaInicio?: Date | null,
-  fechaFin?: Date | null
-) {
-  if (fechaPuntual) {
-    const f = normalizarFecha(fechaPuntual);
-    if (f >= normalizarFecha(desde)) return [f];
-    return [];
-  }
-
-  if (!diaSemana) return [];
-
-  const objetivo = DIA_A_JS[diaSemana];
-  const cursor = normalizarFecha(desde);
-  const diff = (objetivo - cursor.getDay() + 7) % 7;
-  cursor.setDate(cursor.getDate() + diff);
-
-  const fechas: Date[] = [];
-  while (fechas.length < limite) {
-    if (fechaFin && cursor > normalizarFecha(fechaFin)) break;
-    if (!fechaInicio || cursor >= normalizarFecha(fechaInicio)) {
-      fechas.push(new Date(cursor));
-    }
-    cursor.setDate(cursor.getDate() + 7);
-  }
-  return fechas;
+function occKey(horarioId: string, fecha: Date) {
+  return `${horarioId}__${normalizarFecha(fecha).toISOString().slice(0, 10)}`;
 }
 
 export async function GET(req: Request) {
@@ -80,6 +43,11 @@ export async function GET(req: Request) {
     if (!sesionOrigen) return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 });
 
     const ahora = new Date();
+    const desde = normalizarFecha(ahora);
+
+    const lunesBase = getLunes(ahora);
+    const hasta = getDomingo(new Date(lunesBase.getFullYear(), lunesBase.getMonth(), lunesBase.getDate() + 7 * 12));
+    await generarSesionesPorRango(lunesBase, hasta);
 
     // ── Misma clase, otros horarios ──────────────────────────────────────────
 
@@ -88,45 +56,46 @@ export async function GET(req: Request) {
       include: { clase: true, profesor: true, sala: true },
     });
 
-    const mismaClase: Array<{
+    const mismaClaseCand: Array<{
       id: string;
+      horarioId: string;
       fecha: Date;
+      aforo: number;
       horaInicio: string;
       horaFin: string;
       clase: { nombre: string; profesor: { nombre: string }; sala: { nombre: string } };
       tipoConvenio: null;
     }> = [];
 
-    for (const horario of horariosMismaClase) {
-      // Excluir el mismo horario origen — solo queremos horarios distintos
-      if (horario.id === sesionOrigen.horarioId) continue;
+    const horariosAlternos = horariosMismaClase.filter((h) => h.id !== sesionOrigen.horarioId);
+    const metaHorarioMisma = new Map(horariosAlternos.map((h) => [h.id, h]));
+    if (horariosAlternos.length > 0) {
+      const sesionesMismaClase = await prisma.sesion.findMany({
+        where: {
+          horarioId: { in: horariosAlternos.map((h) => h.id) },
+          fecha: { gte: desde, lte: hasta },
+          cancelada: false,
+        },
+        select: {
+          id: true,
+          horarioId: true,
+          fecha: true,
+          horaInicio: true,
+          horaFin: true,
+          aforo: true,
+        },
+      });
 
-      const fechas = siguientesFechasHorario(
-        horario.diaSemana,
-        horario.fecha,
-        normalizarFecha(ahora),
-        12,
-        horario.clase.fechaInicio,
-        horario.clase.fechaFin
-      );
-
-      for (const fecha of fechas) {
-        let sesion;
-        try {
-          ({ sesion } = await materializarSesion(horario.id, fecha));
-        } catch {
-          continue;
-        }
-
+      for (const sesion of sesionesMismaClase) {
         const inicio = getInicioSesion(sesion.fecha, sesion.horaInicio);
-        if (inicio <= ahora || sesion.cancelada) continue;
-
-        const ocupacion = await calcularOcupacionSesion(horario.id, sesion.fecha, sesion.aforo);
-        if (ocupacion.libres <= 0) continue;
-
-        mismaClase.push({
+        if (inicio <= ahora) continue;
+        const horario = metaHorarioMisma.get(sesion.horarioId);
+        if (!horario) continue;
+        mismaClaseCand.push({
           id: sesion.id,
+          horarioId: sesion.horarioId,
           fecha: sesion.fecha,
+          aforo: sesion.aforo,
           horaInicio: sesion.horaInicio,
           horaFin: sesion.horaFin,
           clase: {
@@ -148,9 +117,11 @@ export async function GET(req: Request) {
       },
     });
 
-    const convenio: Array<{
+    const convenioCand: Array<{
       id: string;
+      horarioId: string;
       fecha: Date;
+      aforo: number;
       horaInicio: string;
       horaFin: string;
       clase: { nombre: string; profesor: { nombre: string }; sala: { nombre: string } };
@@ -159,56 +130,76 @@ export async function GET(req: Request) {
       requiereAprobacion: boolean;
     }> = [];
 
-    for (const c of convenios) {
-      const claseDestinoId = c.claseAId === sesionOrigen.claseId ? c.claseBId : c.claseAId;
+    const inicioMes = new Date();
+    inicioMes.setDate(1);
+    inicioMes.setHours(0, 0, 0, 0);
 
-      const inicioMes = new Date();
-      inicioMes.setDate(1);
-      inicioMes.setHours(0, 0, 0, 0);
-
-      const cambiosEsteMes = await prisma.cambio.count({
+    const countsConvenio = convenios.length
+      ? await prisma.cambio.groupBy({
+        by: ["convenioId"],
         where: {
           userId: session.user.id,
-          convenioId: c.id,
+          convenioId: { in: convenios.map((c) => c.id) },
           estado: { in: ["PENDIENTE", "APROBADO"] },
           createdAt: { gte: inicioMes },
         },
-      });
-      if (cambiosEsteMes >= c.limiteMensual) continue;
+        _count: { convenioId: true },
+      })
+      : [];
+    const countPorConvenio = new Map(countsConvenio.map((r) => [r.convenioId, r._count.convenioId]));
 
-      const horariosDestino = await prisma.horario.findMany({
-        where: { claseId: claseDestinoId, activo: true, clase: { activa: true } },
+    const conveniosActivos = convenios
+      .map((c) => ({
+        ...c,
+        claseDestinoId: c.claseAId === sesionOrigen.claseId ? c.claseBId : c.claseAId,
+      }))
+      .filter((c) => (countPorConvenio.get(c.id) ?? 0) < c.limiteMensual);
+
+    const clasesDestinoIds = Array.from(new Set(conveniosActivos.map((c) => c.claseDestinoId)));
+    const horariosDestino = clasesDestinoIds.length
+      ? await prisma.horario.findMany({
+        where: { claseId: { in: clasesDestinoIds }, activo: true, clase: { activa: true } },
         include: { clase: true, profesor: true, sala: true },
-        take: 20,
+      })
+      : [];
+
+    const conveniosPorClaseDestino = new Map<string, typeof conveniosActivos>();
+    for (const c of conveniosActivos) {
+      const list = conveniosPorClaseDestino.get(c.claseDestinoId) ?? [];
+      list.push(c);
+      conveniosPorClaseDestino.set(c.claseDestinoId, list);
+    }
+
+    const metaHorarioDestino = new Map(horariosDestino.map((h) => [h.id, h]));
+    if (horariosDestino.length > 0) {
+      const sesionesDestino = await prisma.sesion.findMany({
+        where: {
+          horarioId: { in: horariosDestino.map((h) => h.id) },
+          fecha: { gte: desde, lte: hasta },
+          cancelada: false,
+        },
+        select: {
+          id: true,
+          horarioId: true,
+          fecha: true,
+          horaInicio: true,
+          horaFin: true,
+          aforo: true,
+        },
       });
 
-      for (const horario of horariosDestino) {
-        const fechas = siguientesFechasHorario(
-          horario.diaSemana,
-          horario.fecha,
-          normalizarFecha(ahora),
-          8,
-          horario.clase.fechaInicio,
-          horario.clase.fechaFin
-        );
-
-        for (const fecha of fechas) {
-          let sesion;
-          try {
-            ({ sesion } = await materializarSesion(horario.id, fecha));
-          } catch {
-            continue;
-          }
-
-          const inicio = getInicioSesion(sesion.fecha, sesion.horaInicio);
-          if (inicio <= ahora || sesion.cancelada) continue;
-
-          const ocupacion = await calcularOcupacionSesion(horario.id, sesion.fecha, sesion.aforo);
-          if (ocupacion.libres <= 0) continue;
-
-          convenio.push({
+      for (const sesion of sesionesDestino) {
+        const inicio = getInicioSesion(sesion.fecha, sesion.horaInicio);
+        if (inicio <= ahora) continue;
+        const horario = metaHorarioDestino.get(sesion.horarioId);
+        if (!horario) continue;
+        const conveniosClase = conveniosPorClaseDestino.get(horario.claseId) ?? [];
+        for (const c of conveniosClase) {
+          convenioCand.push({
             id: sesion.id,
+            horarioId: sesion.horarioId,
             fecha: sesion.fecha,
+            aforo: sesion.aforo,
             horaInicio: sesion.horaInicio,
             horaFin: sesion.horaFin,
             clase: {
@@ -223,6 +214,35 @@ export async function GET(req: Request) {
         }
       }
     }
+
+    const ocupacion = await calcularOcupacionesBatch([
+      ...mismaClaseCand.map((s) => ({ horarioId: s.horarioId, fecha: s.fecha, aforo: s.aforo })),
+      ...convenioCand.map((s) => ({ horarioId: s.horarioId, fecha: s.fecha, aforo: s.aforo })),
+    ]);
+
+    const mismaClase = mismaClaseCand
+      .filter((s) => (ocupacion.get(occKey(s.horarioId, s.fecha))?.libres ?? 0) > 0)
+      .map(({ id, fecha, horaInicio, horaFin, clase, tipoConvenio }) => ({
+        id,
+        fecha,
+        horaInicio,
+        horaFin,
+        clase,
+        tipoConvenio,
+      }));
+
+    const convenio = convenioCand
+      .filter((s) => (ocupacion.get(occKey(s.horarioId, s.fecha))?.libres ?? 0) > 0)
+      .map(({ id, fecha, horaInicio, horaFin, clase, tipoConvenio, convenioId, requiereAprobacion }) => ({
+        id,
+        fecha,
+        horaInicio,
+        horaFin,
+        clase,
+        tipoConvenio,
+        convenioId,
+        requiereAprobacion,
+      }));
 
     return NextResponse.json({
       mismaClase: mismaClase

@@ -287,6 +287,9 @@ model Inscripcion {
   usosBono  UsoBonoSesion[]
 
   @@unique([userId, claseId])
+  @@index([userId, activa])
+  @@index([claseId, activa])
+  @@index([claseId, activa, modalidad])
 }
 
 model UsoBonoSesion {
@@ -308,6 +311,7 @@ model UsoBonoSesion {
   canceladoPor   User?       @relation("UsoBonoCancelador", fields: [canceladoPorId], references: [id])
 
   @@unique([userId, sesionId])
+  @@index([userId, activo])
   @@index([sesionId, activo])
   @@index([inscripcionId, activo])
 }
@@ -365,6 +369,8 @@ model Cambio {
   convenio        Convenio?    @relation(fields: [convenioId], references: [id])
 
   @@index([estado])
+  @@index([userId, convenioId, estado])
+  @@index([userId, sesionOrigenId, estado])
   @@index([sesionOrigenId])
   @@index([sesionDestinoId])
   @@index([estado, sesionOrigenId])
@@ -420,5 +426,6 @@ model Ausencia {
   creadoPor   User     @relation("AusenciaCreador", fields: [creadoPorId], references: [id])
 
   @@unique([userId, horarioId, fecha])
+  @@index([userId])
   @@index([horarioId, fecha])
 }

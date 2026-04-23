@@ -30,7 +30,7 @@ export type ReservaCalendario = {
   clase: { id: string; nombre: string } | null;
 };
 
-type OcupacionSesion = {
+export type OcupacionSesion = {
   inscritos: number;
   ausencias: number;
   cambiosEntrantes: number;
@@ -314,13 +314,25 @@ export async function calcularSesionesSemana(lunesSemana: Date) {
   };
 }
 
-export async function calcularOcupacionesSemanaBatch(sesiones: SesionCalendario[]) {
-  if (sesiones.length === 0) return new Map<string, OcupacionSesion>();
+export async function calcularOcupacionesBatch(
+  objetivosInput: Array<{ horarioId: string; fecha: Date; aforo: number }>
+) {
+  if (objetivosInput.length === 0) return new Map<string, OcupacionSesion>();
+
+  const objetivosUnicos = new Map<string, { horarioId: string; fecha: Date; aforo: number }>();
+  for (const o of objetivosInput) {
+    objetivosUnicos.set(toKey(o.horarioId, o.fecha), {
+      horarioId: o.horarioId,
+      fecha: normalizarFecha(o.fecha),
+      aforo: o.aforo,
+    });
+  }
+  const objetivosNorm = Array.from(objetivosUnicos.values());
 
   // Solo pasamos horarioId (text) y fecha (timestamp) al CTE — sin aforo para evitar
   // conflictos de tipo BigInt en el driver cuando se mezclan int y bigint en VALUES.
-  const objetivos = sesiones.map((s) =>
-    Prisma.sql`(${s.horarioId}::text, ${normalizarFecha(s.fecha)}::timestamp)`
+  const objetivos = objetivosNorm.map((o) =>
+    Prisma.sql`(${o.horarioId}::text, ${normalizarFecha(o.fecha)}::timestamp)`
   );
 
   const rows = await prisma.$queryRaw<Array<{
@@ -334,59 +346,75 @@ export async function calcularOcupacionesSemanaBatch(sesiones: SesionCalendario[
   }>>(Prisma.sql`
 WITH objetivo ("horarioId", "fecha") AS (
   VALUES ${Prisma.join(objetivos)}
+),
+inscritos AS (
+  SELECT ih."horarioId", COUNT(*)::bigint AS "inscritos"
+  FROM "InscripcionHorario" ih
+  JOIN "Inscripcion" i ON i."id" = ih."inscripcionId"
+  JOIN objetivo o ON o."horarioId" = ih."horarioId"
+  WHERE ih."activa" = true
+    AND i."activa" = true
+  GROUP BY ih."horarioId"
+),
+ausencias AS (
+  SELECT a."horarioId", a."fecha", COUNT(*)::bigint AS "ausencias"
+  FROM "Ausencia" a
+  JOIN objetivo o ON o."horarioId" = a."horarioId" AND o."fecha" = a."fecha"
+  GROUP BY a."horarioId", a."fecha"
+),
+cambios_entrantes AS (
+  SELECT sd."horarioId", sd."fecha", COUNT(*)::bigint AS "cambiosEntrantes"
+  FROM "Cambio" c
+  JOIN "Sesion" sd ON sd."id" = c."sesionDestinoId"
+  JOIN objetivo o ON o."horarioId" = sd."horarioId" AND o."fecha" = sd."fecha"
+  WHERE c."estado" IN ('PENDIENTE', 'APROBADO')
+  GROUP BY sd."horarioId", sd."fecha"
+),
+cambios_salientes AS (
+  SELECT so."horarioId", so."fecha", COUNT(*)::bigint AS "cambiosSalientes"
+  FROM "Cambio" c
+  JOIN "Sesion" so ON so."id" = c."sesionOrigenId"
+  JOIN objetivo o ON o."horarioId" = so."horarioId" AND o."fecha" = so."fecha"
+  WHERE c."estado" IN ('PENDIENTE', 'APROBADO')
+  GROUP BY so."horarioId", so."fecha"
+),
+bonos AS (
+  SELECT sb."horarioId", sb."fecha", COUNT(*)::bigint AS "bonos"
+  FROM "UsoBonoSesion" u
+  JOIN "Sesion" sb ON sb."id" = u."sesionId"
+  JOIN "Inscripcion" ib ON ib."id" = u."inscripcionId"
+  JOIN "User" uu ON uu."id" = u."userId"
+  JOIN objetivo o ON o."horarioId" = sb."horarioId" AND o."fecha" = sb."fecha"
+  WHERE u."activo" = true
+    AND ib."activa" = true
+    AND uu."activo" = true
+  GROUP BY sb."horarioId", sb."fecha"
 )
 SELECT
   o."horarioId",
   o."fecha",
-  (
-    SELECT COUNT(*)
-    FROM "InscripcionHorario" ih
-    JOIN "Inscripcion" i ON i."id" = ih."inscripcionId"
-    WHERE ih."horarioId" = o."horarioId"
-      AND ih."activa" = true
-      AND i."activa" = true
-  ) AS "inscritos",
-  (
-    SELECT COUNT(*)
-    FROM "Ausencia" a
-    WHERE a."horarioId" = o."horarioId"
-      AND a."fecha" = o."fecha"
-  ) AS "ausencias",
-  (
-    SELECT COUNT(*)
-    FROM "Cambio" c
-    JOIN "Sesion" sd ON sd."id" = c."sesionDestinoId"
-    WHERE c."estado" IN ('PENDIENTE', 'APROBADO')
-      AND sd."horarioId" = o."horarioId"
-      AND sd."fecha" = o."fecha"
-  ) AS "cambiosEntrantes",
-  (
-    SELECT COUNT(*)
-    FROM "Cambio" c
-    JOIN "Sesion" so ON so."id" = c."sesionOrigenId"
-    WHERE c."estado" IN ('PENDIENTE', 'APROBADO')
-      AND so."horarioId" = o."horarioId"
-      AND so."fecha" = o."fecha"
-  ) AS "cambiosSalientes",
-  (
-    SELECT COUNT(*)
-    FROM "UsoBonoSesion" u
-    JOIN "Sesion" sb ON sb."id" = u."sesionId"
-    JOIN "Inscripcion" ib ON ib."id" = u."inscripcionId"
-    JOIN "User" uu ON uu."id" = u."userId"
-    WHERE u."activo" = true
-      AND ib."activa" = true
-      AND uu."activo" = true
-      AND sb."horarioId" = o."horarioId"
-      AND sb."fecha" = o."fecha"
-  ) AS "bonos"
+  COALESCE(i."inscritos", 0) AS "inscritos",
+  COALESCE(a."ausencias", 0) AS "ausencias",
+  COALESCE(ce."cambiosEntrantes", 0) AS "cambiosEntrantes",
+  COALESCE(cs."cambiosSalientes", 0) AS "cambiosSalientes",
+  COALESCE(b."bonos", 0) AS "bonos"
 FROM objetivo o
+LEFT JOIN inscritos i
+  ON i."horarioId" = o."horarioId"
+LEFT JOIN ausencias a
+  ON a."horarioId" = o."horarioId" AND a."fecha" = o."fecha"
+LEFT JOIN cambios_entrantes ce
+  ON ce."horarioId" = o."horarioId" AND ce."fecha" = o."fecha"
+LEFT JOIN cambios_salientes cs
+  ON cs."horarioId" = o."horarioId" AND cs."fecha" = o."fecha"
+LEFT JOIN bonos b
+  ON b."horarioId" = o."horarioId" AND b."fecha" = o."fecha"
 `);
 
   // Construir mapa de aforo desde el array JS (evita pasarlo por SQL)
   const aforoPorKey = new Map<string, number>();
-  for (const s of sesiones) {
-    aforoPorKey.set(toKey(s.horarioId, s.fecha), s.aforo);
+  for (const o of objetivosNorm) {
+    aforoPorKey.set(toKey(o.horarioId, o.fecha), o.aforo);
   }
 
   const ocupacionPorKey = new Map<string, OcupacionSesion>();
@@ -411,8 +439,8 @@ FROM objetivo o
   }
 
   const result = new Map<string, OcupacionSesion>();
-  for (const s of sesiones) {
-    const k = toKey(s.horarioId, s.fecha);
+  for (const o of objetivosNorm) {
+    const k = toKey(o.horarioId, o.fecha);
     result.set(k, ocupacionPorKey.get(k) || {
       inscritos: 0,
       ausencias: 0,
@@ -420,11 +448,21 @@ FROM objetivo o
       cambiosSalientes: 0,
       bonos: 0,
       ocupados: 0,
-      libres: s.aforo,
+      libres: o.aforo,
     });
   }
 
   return result;
+}
+
+export async function calcularOcupacionesSemanaBatch(sesiones: SesionCalendario[]) {
+  return calcularOcupacionesBatch(
+    sesiones.map((s) => ({
+      horarioId: s.horarioId,
+      fecha: s.fecha,
+      aforo: s.aforo,
+    }))
+  );
 }
 
 export async function calcularOcupacionSesion(horarioId: string, fecha: Date, aforo: number) {
