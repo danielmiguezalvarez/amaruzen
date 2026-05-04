@@ -27,9 +27,10 @@ export async function GET(req: Request) {
         activa: true,
         inscripcion: { userId: session.user.id, activa: true },
       },
-      select: { horarioId: true },
+      select: { horarioId: true, inscripcion: { select: { claseId: true } } },
     });
     const horariosPropios = new Set(inscripciones.map((i) => i.horarioId));
+    const clasesPropias = new Set(inscripciones.map((i) => i.inscripcion.claseId));
 
     const usosBono = await prisma.usoBonoSesion.findMany({
       where: {
@@ -75,6 +76,8 @@ export async function GET(req: Request) {
         ((horariosPropios.has(s.horarioId) || (s.sesionId ? sesionesCambioDestino.has(s.sesionId) : false))
           && !(s.sesionId ? sesionesCambioOrigen.has(s.sesionId) : false))
         || (s.sesionId ? sesionesBono.has(s.sesionId) : false),
+      // True si el alumno tiene inscripción activa en la clase (aunque no sea este horario exacto)
+      esInscritoEnClase: clasesPropias.has(s.claseId),
       esBono: s.sesionId ? sesionesBono.has(s.sesionId) : false,
       clase: s.clase,
     }));

@@ -11,12 +11,14 @@ type Sesion = {
   id: string;
   sesionId: string | null;
   horarioId: string;
+  claseId: string;
   fecha: string;
   horaInicio: string;
   horaFin: string;
   aforo: number;
   cancelada: boolean;
   esInscrito: boolean;
+  esInscritoEnClase?: boolean;
   esBono?: boolean;
   clase: {
     id: string;
@@ -190,8 +192,7 @@ export default function ClasesClient() {
 
   async function abrirModal(sesion: Sesion) {
     const bono = getBonoParaSesion(sesion, bonosPorClase);
-    const puedeInscribirse = bono && !sesion.esInscrito && !sesion.cancelada;
-    const tieneInscripcionRegular = sesion.esInscrito && !sesion.esBono;
+    const tieneInscripcionRegular = (sesion.esInscrito || sesion.esInscritoEnClase) && !sesion.esBono;
 
     // Decide pestaña por defecto
     const tabInicial: "bono" | "cambio" = bono ? "bono" : "cambio";
@@ -203,7 +204,7 @@ export default function ClasesClient() {
     setBonoMensaje("");
     setExito("");
 
-    // Si tiene inscripción regular (no bono), pre-cargar opciones de cambio
+    // Si tiene inscripción en la clase (aunque sea otro horario), pre-cargar opciones de cambio
     if (tieneInscripcionRegular) {
       setLoadingOpciones(true);
       const origenRef = sesion.sesionId || `${sesion.horarioId}__${toLocalYMD(new Date(sesion.fecha))}`;
@@ -221,9 +222,6 @@ export default function ClasesClient() {
         setLoadingOpciones(false);
       }
     }
-
-    // Suprimir advertencia de variable no usada
-    void puedeInscribirse;
   }
 
   function cerrarModal() {
@@ -266,13 +264,13 @@ export default function ClasesClient() {
     if (s.cancelada) return;
 
     const bono = getBonoParaSesion(s, bonosPorClase);
-    const tieneInscripcionRegular = s.esInscrito && !s.esBono;
+    // Puede abrir el modal si: tiene bono para esta clase, está inscrito en este horario,
+    // o está inscrito en la clase (aunque sea otro horario — para pedir cambio excepcional)
+    const puedeAbrir = !!bono || s.esInscrito || s.esInscritoEnClase;
+    if (!puedeAbrir) return;
 
-    // Abrir modal si tiene bono para esa clase O si está inscrito por horario regular
-    if (!bono && !tieneInscripcionRegular) return;
-
-    // Para inscripción regular, solo abrir si la sesión es futura
-    if (tieneInscripcionRegular && !bono) {
+    // Para inscripción regular (sin bono), solo abrir si la sesión es futura
+    if (!bono && (s.esInscrito || s.esInscritoEnClase)) {
       const fechaSesion = new Date(s.fecha);
       const [h, m] = s.horaInicio.split(":").map(Number);
       fechaSesion.setHours(h, m, 0, 0);
@@ -411,7 +409,7 @@ export default function ClasesClient() {
       {sesionSeleccionada && (() => {
         const s = sesionSeleccionada;
         const bono = getBonoParaSesion(s, bonosPorClase);
-        const tieneInscripcionRegular = s.esInscrito && !s.esBono;
+        const tieneInscripcionRegular = (s.esInscrito || s.esInscritoEnClase) && !s.esBono;
         const mostrarTabs = !!bono && tieneInscripcionRegular;
 
         const fechaSesion = new Date(s.fecha);

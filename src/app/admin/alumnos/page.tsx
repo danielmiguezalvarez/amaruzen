@@ -211,12 +211,19 @@ export default function AlumnosPage() {
 
   const clasesNoInscritas = useMemo(() => {
     if (!detalle) return [];
-    return clases.filter((c) => !detalle.inscripciones.some((i) => i.clase.id === c.id));
+    // Incluye todas las clases activas — si ya está inscrito, permite editar sus horarios
+    return clases;
   }, [clases, detalle]);
 
   const claseSeleccionada = useMemo(
     () => clases.find((c) => c.id === claseAnadir) || null,
     [claseAnadir, clases]
+  );
+
+  // Cuando se selecciona una clase ya inscrita, pre-rellenar horarios y numClases
+  const inscripcionExistente = useMemo(
+    () => detalle?.inscripciones.find((i) => i.clase.id === claseAnadir) || null,
+    [claseAnadir, detalle]
   );
 
   return (
@@ -448,8 +455,18 @@ export default function AlumnosPage() {
                     <select
                       value={claseAnadir}
                       onChange={(e) => {
-                        setClaseAnadir(e.target.value);
-                        setHorariosSel([]);
+                        const claseId = e.target.value;
+                        setClaseAnadir(claseId);
+                        // Pre-rellenar si ya tiene inscripción en esa clase
+                        const insc = detalle?.inscripciones.find((i) => i.clase.id === claseId);
+                        if (insc) {
+                          setModalidadAnadir(insc.modalidad as "SEMANAL" | "BONO");
+                          setNumClases(String(insc.numClases || insc.horarios.length || 1));
+                          setHorariosSel(insc.horarios.map((h) => h.horario.id));
+                        } else {
+                          setHorariosSel([]);
+                          setNumClases("1");
+                        }
                       }}
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm"
                     >
@@ -538,7 +555,7 @@ export default function AlumnosPage() {
                   disabled={!claseAnadir || (modalidadAnadir === "SEMANAL" && horariosSel.length === 0)}
                   className="px-4 py-2 bg-stone-800 text-white rounded-lg text-sm font-medium hover:bg-stone-700 disabled:opacity-50"
                 >
-                  Guardar inscripción
+                  {inscripcionExistente ? "Actualizar inscripción" : "Guardar inscripción"}
                 </button>
               </div>
             )}
