@@ -6,6 +6,7 @@ type Cambio = {
   id: string;
   estado: "PENDIENTE" | "APROBADO" | "RECHAZADO";
   createdAt: string;
+  updatedAt: string;
   user: { name: string | null; email: string };
   sesionOrigen: { fecha: string; horaInicio: string; clase: { nombre: string; profesor: { nombre: string } } };
   sesionDestino: { fecha: string; horaInicio: string; clase: { nombre: string; profesor: { nombre: string } } };
@@ -168,10 +169,15 @@ export default function CambiosPage() {
                     </div>
                     <div className="text-xs text-stone-400 mt-1">
                       {new Date(c.sesionOrigen.fecha).toLocaleDateString("es-ES")} {c.sesionOrigen.horaInicio}
-                      {" -> "}
+                      {" → "}
                       {new Date(c.sesionDestino.fecha).toLocaleDateString("es-ES")} {c.sesionDestino.horaInicio}
                       {" · "}
                       Solicitado: {new Date(c.createdAt).toLocaleDateString("es-ES")}
+                      {c.estado !== "PENDIENTE" && (
+                        <span className="ml-1">
+                          · {c.estado === "APROBADO" ? "Aprobado" : "Rechazado"}: {new Date(c.updatedAt).toLocaleDateString("es-ES")}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="shrink-0 flex flex-col items-end gap-2">
