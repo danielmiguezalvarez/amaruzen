@@ -21,7 +21,12 @@ export async function GET(req: Request) {
       where: { estado: { in: estados }, createdAt: { gt: vistoAt } },
     });
   } else {
-    count = await prisma.cambio.count({ where: { estado: "PENDIENTE" } });
+    // Sin vistoAt: PENDIENTE + APROBADO en últimas 24h
+    const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const estados: EstadoCambio[] = ["PENDIENTE", "APROBADO"];
+    count = await prisma.cambio.count({
+      where: { estado: { in: estados }, createdAt: { gte: hace24h } },
+    });
   }
 
   return NextResponse.json({ count });

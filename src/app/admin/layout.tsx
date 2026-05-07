@@ -48,10 +48,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   useEffect(() => {
+    // Si estamos en /admin/cambios, el badge se resetea a 0 de inmediato
+    // (la página ya habrá actualizado localStorage al montarse)
+    if (pathname === "/admin/cambios") {
+      setCambiosPendientes(0);
+    }
     cargarBadges();
     const interval = setInterval(cargarBadges, 30_000);
     return () => clearInterval(interval);
-  }, [pathname]); // re-fetch al navegar y cada 30s
+  }, [pathname]);
 
   return (
     <div className="min-h-screen bg-stone-50">
