@@ -320,7 +320,7 @@ FROM objetivo o
         horaFin,
         clase,
         tipoConvenio,
-        semanaAnterior: fecha < lunesEstaSeamana,
+        semanaAnterior: normalizarFecha(fecha) < lunesEstaSeamana,
       }));
 
     const convenio = convenioCand
@@ -337,7 +337,7 @@ FROM objetivo o
         tipoConvenio,
         convenioId,
         requiereAprobacion,
-        semanaAnterior: fecha < lunesEstaSeamana,
+        semanaAnterior: normalizarFecha(fecha) < lunesEstaSeamana,
       }));
 
     const mismaClaseUnica = Array.from(new Map(mismaClase.map((s) => [s.id, s])).values());
