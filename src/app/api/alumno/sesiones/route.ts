@@ -393,6 +393,13 @@ FROM objetivo o
         horariosDestinoIds: horariosDestino.map((h) => ({ id: h.id, clase: h.clase.nombre })),
         convenioCandCount: convenioCand.length,
         mismaClaseCandCount: mismaClaseCand.length,
+        convenioCandLibres: convenioCand.map((s) => ({
+          id: s.id,
+          fecha: s.fecha,
+          horaInicio: s.horaInicio,
+          aforo: s.aforo,
+          libres: libresPorSesion.get(s.id),
+        })),
       },
     };
 
