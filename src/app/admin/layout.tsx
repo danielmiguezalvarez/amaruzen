@@ -26,9 +26,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   async function cargarBadges() {
     try {
+      const vistoAt = typeof window !== "undefined" ? localStorage.getItem("admin_cambios_visto_at") : null;
+      const badgeUrl = vistoAt
+        ? `/api/admin/cambios/badge?vistoAt=${vistoAt}`
+        : "/api/admin/cambios/badge";
       const [resSol, resCam] = await Promise.all([
         fetch("/api/admin/solicitudes"),
-        fetch("/api/admin/cambios/badge"),
+        fetch(badgeUrl),
       ]);
       if (resSol.ok) {
         const data: Array<{ estado: string }> = await resSol.json();

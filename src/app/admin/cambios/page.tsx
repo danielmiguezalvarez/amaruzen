@@ -18,6 +18,8 @@ const ESTADO_COLORS: Record<string, string> = {
   RECHAZADO: "bg-red-100 text-red-600",
 };
 
+const LS_KEY = "admin_cambios_visto_at";
+
 export default function CambiosPage() {
   const [cambios, setCambios] = useState<Cambio[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,6 +28,7 @@ export default function CambiosPage() {
   const [query, setQuery] = useState("");
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
+  const [vistoAt, setVistoAt] = useState<number>(0);
 
   async function cargar() {
     const data = await fetch("/api/admin/cambios").then((r) => r.json());
@@ -33,7 +36,13 @@ export default function CambiosPage() {
     setLoading(false);
   }
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => {
+    cargar();
+    // Leer timestamp anterior y luego marcarlo como visto ahora
+    const prev = Number(localStorage.getItem(LS_KEY) || "0");
+    setVistoAt(prev);
+    localStorage.setItem(LS_KEY, String(Date.now()));
+  }, []);
 
   async function actualizarEstado(id: string, estado: "APROBADO" | "RECHAZADO") {
     setUpdatingId(id);
@@ -134,10 +143,11 @@ export default function CambiosPage() {
             </div>
           ) : (
             cambiosFiltrados.map((c) => {
-              const esReciente = (Date.now() - new Date(c.createdAt).getTime()) < 24 * 60 * 60 * 1000;
-              const resaltarAprobado = c.estado === "APROBADO" && esReciente;
+              const createdMs = new Date(c.createdAt).getTime();
+              const esNuevo = createdMs > vistoAt;
+              const resaltarAprobado = c.estado === "APROBADO" && esNuevo;
               return (
-              <div key={c.id} className={`rounded-xl border p-5 ${c.estado === "PENDIENTE" ? "bg-amber-50 border-amber-300" : resaltarAprobado ? "bg-green-50 border-green-300" : "bg-white border-stone-200"}`}>
+              <div key={c.id} className={`rounded-xl border p-5 ${c.estado === "PENDIENTE" && esNuevo ? "bg-amber-50 border-amber-300" : resaltarAprobado ? "bg-green-50 border-green-300" : "bg-white border-stone-200"}`}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
