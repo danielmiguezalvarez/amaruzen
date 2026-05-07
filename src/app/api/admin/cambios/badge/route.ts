@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api-auth";
+import type { EstadoCambio } from "@prisma/client";
 
 // GET /api/admin/cambios/badge?vistoAt=<timestamp_ms>
-// Devuelve el número de cambios nuevos desde la última visita del admin:
-// - PENDIENTE creados después de vistoAt
-// - APROBADO creados después de vistoAt (aprobados automáticamente)
+// Devuelve el número de cambios nuevos desde la última visita del admin.
 // Si no se pasa vistoAt, cuenta todos los PENDIENTE.
 export async function GET(req: Request) {
   const auth = await requireAdmin();
@@ -15,11 +14,15 @@ export async function GET(req: Request) {
   const vistoAtParam = searchParams.get("vistoAt");
   const vistoAt = vistoAtParam ? new Date(Number(vistoAtParam)) : null;
 
-  const where = vistoAt
-    ? { createdAt: { gt: vistoAt }, estado: { in: ["PENDIENTE", "APROBADO"] as const } }
-    : { estado: "PENDIENTE" as const };
-
-  const count = await prisma.cambio.count({ where });
+  let count: number;
+  if (vistoAt) {
+    const estados: EstadoCambio[] = ["PENDIENTE", "APROBADO"];
+    count = await prisma.cambio.count({
+      where: { estado: { in: estados }, createdAt: { gt: vistoAt } },
+    });
+  } else {
+    count = await prisma.cambio.count({ where: { estado: "PENDIENTE" } });
+  }
 
   return NextResponse.json({ count });
 }
