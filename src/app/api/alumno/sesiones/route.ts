@@ -45,6 +45,17 @@ export async function GET(req: Request) {
     });
     if (!sesionOrigen) return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 });
 
+    // Verificar que el alumno tiene inscripción activa en la clase de la sesión origen
+    const inscripcionPropia = await prisma.inscripcionHorario.findFirst({
+      where: {
+        activa: true,
+        inscripcion: { userId: session.user.id, activa: true, claseId: sesionOrigen.claseId },
+      },
+    });
+    if (!inscripcionPropia) {
+      return NextResponse.json({ error: "No tienes inscripción en esta clase" }, { status: 403 });
+    }
+
     const ahora = new Date();
 
     // Semana de la sesión origen — las opciones "anteriores" son las de la semana previa a esa
@@ -162,6 +173,15 @@ export async function GET(req: Request) {
         claseDestinoId: c.claseAId === sesionOrigen.claseId ? c.claseBId : c.claseAId,
       }))
       .filter((c) => (countPorConvenio.get(c.id) ?? 0) < c.limiteMensual);
+
+    // Convenios cuyo límite mensual está agotado — para informar al alumno
+    const conveniosAgotados = convenios
+      .map((c) => ({
+        ...c,
+        claseDestinoId: c.claseAId === sesionOrigen.claseId ? c.claseBId : c.claseAId,
+        usados: countPorConvenio.get(c.id) ?? 0,
+      }))
+      .filter((c) => c.usados >= c.limiteMensual);
 
     const clasesDestinoIds = Array.from(new Set(conveniosActivos.map((c) => c.claseDestinoId)));
     const horariosDestino = clasesDestinoIds.length
@@ -343,10 +363,24 @@ FROM objetivo o
     const mismaClaseUnica = Array.from(new Map(mismaClase.map((s) => [s.id, s])).values());
     const convenioUnico = Array.from(new Map(convenio.map((s) => [s.id, s])).values());
 
+    // Nombres de clases destino de convenios agotados
+    let conveniosAgotadosInfo: Array<{ claseNombre: string; usados: number; limite: number }> = [];
+    if (conveniosAgotados.length > 0) {
+      const claseIds = Array.from(new Set(conveniosAgotados.map((c) => c.claseDestinoId)));
+      const clases = await prisma.clase.findMany({ where: { id: { in: claseIds } }, select: { id: true, nombre: true } });
+      const nombrePorClase = new Map(clases.map((c) => [c.id, c.nombre]));
+      conveniosAgotadosInfo = conveniosAgotados.map((c) => ({
+        claseNombre: nombrePorClase.get(c.claseDestinoId) ?? c.claseDestinoId,
+        usados: c.usados,
+        limite: c.limiteMensual,
+      }));
+    }
+
     // Ordenar: semana actual primero (ascendente), luego semana anterior (descendente — más reciente primero)
     const payload = {
       mismaClase: ordenarOpcionesSesion(mismaClaseUnica).slice(0, 12),
       convenio: ordenarOpcionesSesion(convenioUnico).slice(0, 14),
+      conveniosAgotados: conveniosAgotadosInfo,
     };
 
     return NextResponse.json(payload);

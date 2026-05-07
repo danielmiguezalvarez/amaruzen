@@ -97,7 +97,11 @@ export default function ClasesClient() {
   const [modalTab, setModalTab] = useState<"bono" | "cambio">("bono");
 
   // Cambio de horario
-  const [opciones, setOpciones] = useState<{ mismaClase: SesionDisponible[]; convenio: SesionDisponible[] } | null>(null);
+  const [opciones, setOpciones] = useState<{
+    mismaClase: SesionDisponible[];
+    convenio: SesionDisponible[];
+    conveniosAgotados?: Array<{ claseNombre: string; usados: number; limite: number }>;
+  } | null>(null);
   const [loadingOpciones, setLoadingOpciones] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
@@ -591,6 +595,16 @@ export default function ClasesClient() {
                         <p className="text-sm text-stone-400 text-center py-4">
                           No hay sesiones disponibles para cambiarte en este momento.
                         </p>
+                      )}
+
+                      {opciones.conveniosAgotados && opciones.conveniosAgotados.length > 0 && (
+                        <div className="mt-3 space-y-1">
+                          {opciones.conveniosAgotados.map((c, i) => (
+                            <p key={i} className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                              Has alcanzado el límite mensual de cambios a <strong>{c.claseNombre}</strong> ({c.usados}/{c.limite} este mes). Habla con el admin si necesitas más.
+                            </p>
+                          ))}
+                        </div>
                       )}
                     </div>
                   ) : (
