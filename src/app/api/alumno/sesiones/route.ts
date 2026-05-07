@@ -66,7 +66,10 @@ export async function GET(req: Request) {
     const desde = normalizarFecha(lunesSemanaPasada);
 
     const lunesBase = getLunes(ahora);
-    const hasta = getDomingo(new Date(lunesBase.getFullYear(), lunesBase.getMonth(), lunesBase.getDate() + 7 * 12));
+    // Mostrar solo semana anterior + semana sesión + semana siguiente (3 semanas visibles, 2 desde la sesión)
+    const lunesSiguiente = new Date(lunesSemanaSesion);
+    lunesSiguiente.setDate(lunesSiguiente.getDate() + 7);
+    const hasta = getDomingo(lunesSiguiente);
     await generarSesionesPorRango(lunesBase, hasta);
 
     // ── Misma clase, otros horarios ──────────────────────────────────────────
@@ -108,7 +111,8 @@ export async function GET(req: Request) {
 
       for (const sesion of sesionesMismaClase) {
         const inicio = getInicioSesion(sesion.fecha, sesion.horaInicio);
-        if (inicio <= ahora) continue;
+        const esSemanaAnterior = normalizarFecha(sesion.fecha) < lunesSemanaSesion;
+        if (!esSemanaAnterior && inicio <= ahora) continue;
         const horario = metaHorarioMisma.get(sesion.horarioId);
         if (!horario) continue;
         mismaClaseCand.push({
@@ -219,7 +223,8 @@ export async function GET(req: Request) {
 
       for (const sesion of sesionesDestino) {
         const inicio = getInicioSesion(sesion.fecha, sesion.horaInicio);
-        if (inicio <= ahora) continue;
+        const esSemanaAnterior = normalizarFecha(sesion.fecha) < lunesSemanaSesion;
+        if (!esSemanaAnterior && inicio <= ahora) continue;
         const horario = metaHorarioDestino.get(sesion.horarioId);
         if (!horario) continue;
         const conveniosClase = conveniosPorClaseDestino.get(horario.claseId) ?? [];
