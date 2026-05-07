@@ -101,6 +101,7 @@ export default function ClasesClient() {
     mismaClase: SesionDisponible[];
     convenio: SesionDisponible[];
     conveniosAgotados?: Array<{ claseNombre: string; usados: number; limite: number }>;
+    _error?: string;
   } | null>(null);
   const [loadingOpciones, setLoadingOpciones] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -219,7 +220,8 @@ export default function ClasesClient() {
           const data = await res.json();
           setOpciones(data);
         } else {
-          setOpciones({ mismaClase: [], convenio: [] });
+          const data = await res.json().catch(() => ({}));
+          setOpciones({ mismaClase: [], convenio: [], _error: data.error });
         }
       } catch {
         setOpciones({ mismaClase: [], convenio: [] });
@@ -591,9 +593,15 @@ export default function ClasesClient() {
                         </div>
                       )}
 
-                      {opciones.mismaClase.length === 0 && opciones.convenio.length === 0 && (
+                      {opciones.mismaClase.length === 0 && opciones.convenio.length === 0 && !opciones._error && (
                         <p className="text-sm text-stone-400 text-center py-4">
                           No hay sesiones disponibles para cambiarte en este momento.
+                        </p>
+                      )}
+
+                      {opciones._error && (
+                        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                          {opciones._error}
                         </p>
                       )}
 

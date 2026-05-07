@@ -52,6 +52,7 @@ export async function GET(req: Request) {
         inscripcion: { userId: session.user.id, activa: true, claseId: sesionOrigen.claseId },
       },
     });
+    console.log("[alumno/sesiones] userId:", session.user.id, "claseId:", sesionOrigen.claseId, "inscripcionPropia:", inscripcionPropia?.id ?? "null");
     if (!inscripcionPropia) {
       return NextResponse.json({ error: "No tienes inscripción en esta clase" }, { status: 403 });
     }
