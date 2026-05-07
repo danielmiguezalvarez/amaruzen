@@ -48,6 +48,7 @@ type SesionDisponible = {
   tipoConvenio: "EQUIVALENTE" | "EXCEPCIONAL" | null;
   convenioId?: string;
   requiereAprobacion?: boolean;
+  semanaAnterior?: boolean;
 };
 
 type Reserva = {
@@ -537,14 +538,19 @@ export default function ClasesClient() {
                         <div>
                           <h3 className="text-sm font-semibold text-stone-700 mb-2">Misma clase, otro horario</h3>
                           <div className="space-y-2">
-                            {opciones.mismaClase.map((dest) => (
-                              <button key={dest.id} onClick={() => solicitarCambio(dest)} disabled={enviando}
-                                className="w-full text-left p-3 border border-stone-200 rounded-lg hover:border-stone-400 hover:bg-stone-50 transition-colors disabled:opacity-50">
-                                <p className="text-sm font-medium text-stone-800">
-                                  {new Date(dest.fecha).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
-                                </p>
-                                <p className="text-xs text-stone-500">{dest.horaInicio} - {dest.horaFin} · {dest.clase.sala.nombre}</p>
-                              </button>
+                            {opciones.mismaClase.map((dest, i) => (
+                              <div key={dest.id}>
+                                {dest.semanaAnterior && (i === 0 || !opciones.mismaClase[i - 1].semanaAnterior) && (
+                                  <p className="text-xs text-stone-400 uppercase tracking-wide mt-3 mb-1">Semana anterior</p>
+                                )}
+                                <button onClick={() => solicitarCambio(dest)} disabled={enviando}
+                                  className={`w-full text-left p-3 border rounded-lg hover:border-stone-400 hover:bg-stone-50 transition-colors disabled:opacity-50 ${dest.semanaAnterior ? "border-stone-200 opacity-75" : "border-stone-200"}`}>
+                                  <p className="text-sm font-medium text-stone-800">
+                                    {new Date(dest.fecha).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+                                  </p>
+                                  <p className="text-xs text-stone-500">{dest.horaInicio} - {dest.horaFin} · {dest.clase.sala.nombre}</p>
+                                </button>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -554,23 +560,28 @@ export default function ClasesClient() {
                         <div>
                           <h3 className="text-sm font-semibold text-stone-700 mb-2">Clases equivalentes</h3>
                           <div className="space-y-2">
-                            {opciones.convenio.map((dest) => (
-                              <button key={dest.id} onClick={() => solicitarCambio(dest)} disabled={enviando}
-                                className="w-full text-left p-3 border border-stone-200 rounded-lg hover:border-stone-400 hover:bg-stone-50 transition-colors disabled:opacity-50">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <p className="text-sm font-medium text-stone-800">{dest.clase.nombre}</p>
-                                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${dest.tipoConvenio === "EXCEPCIONAL" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
-                                    {dest.tipoConvenio === "EXCEPCIONAL" ? "Excepcional" : "Equivalente"}
-                                  </span>
-                                  {dest.requiereAprobacion && (
-                                    <span className="px-1.5 py-0.5 rounded text-xs bg-orange-100 text-orange-700">Requiere aprobación</span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-stone-500">
-                                  {new Date(dest.fecha).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })} · {dest.horaInicio} - {dest.horaFin}
-                                </p>
-                                <p className="text-xs text-stone-400">{dest.clase.profesor.nombre} · {dest.clase.sala.nombre}</p>
-                              </button>
+                            {opciones.convenio.map((dest, i) => (
+                              <div key={dest.id}>
+                                {dest.semanaAnterior && (i === 0 || !opciones.convenio[i - 1].semanaAnterior) && (
+                                  <p className="text-xs text-stone-400 uppercase tracking-wide mt-3 mb-1">Semana anterior</p>
+                                )}
+                                <button onClick={() => solicitarCambio(dest)} disabled={enviando}
+                                  className={`w-full text-left p-3 border rounded-lg hover:border-stone-400 hover:bg-stone-50 transition-colors disabled:opacity-50 ${dest.semanaAnterior ? "border-stone-200 opacity-75" : "border-stone-200"}`}>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <p className="text-sm font-medium text-stone-800">{dest.clase.nombre}</p>
+                                    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${dest.tipoConvenio === "EXCEPCIONAL" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                                      {dest.tipoConvenio === "EXCEPCIONAL" ? "Excepcional" : "Equivalente"}
+                                    </span>
+                                    {dest.requiereAprobacion && (
+                                      <span className="px-1.5 py-0.5 rounded text-xs bg-orange-100 text-orange-700">Requiere aprobación</span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-stone-500">
+                                    {new Date(dest.fecha).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })} · {dest.horaInicio} - {dest.horaFin}
+                                  </p>
+                                  <p className="text-xs text-stone-400">{dest.clase.profesor.nombre} · {dest.clase.sala.nombre}</p>
+                                </button>
+                              </div>
                             ))}
                           </div>
                         </div>

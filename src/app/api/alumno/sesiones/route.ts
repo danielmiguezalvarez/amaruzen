@@ -19,6 +19,12 @@ function getInicioSesion(fecha: Date, horaInicio: string) {
   return inicio;
 }
 
+function ordenarOpcionesSesion<T extends { fecha: Date; semanaAnterior: boolean }>(arr: T[]): T[] {
+  const actuales = arr.filter((s) => !s.semanaAnterior).sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
+  const anteriores = arr.filter((s) => s.semanaAnterior).sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
+  return [...actuales, ...anteriores];
+}
+
 export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -40,7 +46,12 @@ export async function GET(req: Request) {
     if (!sesionOrigen) return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 });
 
     const ahora = new Date();
-    const desde = normalizarFecha(ahora);
+
+    // Límite inferior: lunes de la semana anterior (permite sesiones no iniciadas de la semana pasada)
+    const lunesEstaSeamana = getLunes(ahora);
+    const lunesSemanaPasada = new Date(lunesEstaSeamana);
+    lunesSemanaPasada.setDate(lunesSemanaPasada.getDate() - 7);
+    const desde = normalizarFecha(lunesSemanaPasada);
 
     const lunesBase = getLunes(ahora);
     const hasta = getDomingo(new Date(lunesBase.getFullYear(), lunesBase.getMonth(), lunesBase.getDate() + 7 * 12));
@@ -309,6 +320,7 @@ FROM objetivo o
         horaFin,
         clase,
         tipoConvenio,
+        semanaAnterior: fecha < lunesEstaSeamana,
       }));
 
     const convenio = convenioCand
@@ -325,18 +337,16 @@ FROM objetivo o
         tipoConvenio,
         convenioId,
         requiereAprobacion,
+        semanaAnterior: fecha < lunesEstaSeamana,
       }));
 
     const mismaClaseUnica = Array.from(new Map(mismaClase.map((s) => [s.id, s])).values());
     const convenioUnico = Array.from(new Map(convenio.map((s) => [s.id, s])).values());
 
+    // Ordenar: semana actual primero (ascendente), luego semana anterior (descendente — más reciente primero)
     const payload = {
-      mismaClase: mismaClaseUnica
-        .sort((a, b) => a.fecha.getTime() - b.fecha.getTime())
-        .slice(0, 10),
-      convenio: convenioUnico
-        .sort((a, b) => a.fecha.getTime() - b.fecha.getTime())
-        .slice(0, 12),
+      mismaClase: ordenarOpcionesSesion(mismaClaseUnica).slice(0, 12),
+      convenio: ordenarOpcionesSesion(convenioUnico).slice(0, 14),
     };
 
     return NextResponse.json(payload);

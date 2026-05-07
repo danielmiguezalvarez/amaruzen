@@ -89,6 +89,7 @@ export default function SesionesPage() {
   const [moverDestinoId, setMoverDestinoId] = useState("");
   const [moverPermanente, setMoverPermanente] = useState(false);
   const [procesandoMover, setProcesandoMover] = useState(false);
+  const [sesionesSemanaPasada, setSesionesSemanaPasada] = useState<SesionApi[]>([]);
 
   const [puntualOpen, setPuntualOpen] = useState(false);
   const [clasesLite, setClasesLite] = useState<ClaseLite[]>([]);
@@ -245,12 +246,21 @@ export default function SesionesPage() {
     await cargar(lunes);
   }
 
-  function abrirMoverAlumno(alumnoId: string) {
+  async function abrirMoverAlumno(alumnoId: string) {
     if (!fichaData) return;
     setAlumnoMoverId(alumnoId);
     setMoverDestinoId("");
     setMoverPermanente(false);
+    setSesionesSemanaPasada([]);
     setMoverOpen(true);
+    // Cargar semana anterior para ampliar opciones destino
+    const lunesSemanaPasada = new Date(lunes);
+    lunesSemanaPasada.setDate(lunesSemanaPasada.getDate() - 7);
+    const res = await fetch(`/api/admin/sesiones/semana?fecha=${toLocalYMD(lunesSemanaPasada)}`);
+    if (res.ok) {
+      const data = await res.json();
+      setSesionesSemanaPasada(data.sesiones || []);
+    }
   }
 
   async function marcarAusenciaAlumno(alumnoId: string) {
@@ -343,31 +353,66 @@ export default function SesionesPage() {
     return set;
   }, [conveniosLite, fichaData]);
 
-  const opcionesMoverMismaClase = sesiones
-    .filter((s) => {
-      if (!fichaData) return false;
-      const origenKey = `${fichaData.sesion.horarioId}__${toLocalYMD(new Date(fichaData.sesion.fecha))}`;
-      const esMismaKey = s.id === origenKey || (s.sesionId !== null && s.sesionId === fichaData.sesion.id);
-      if (esMismaKey || s.cancelada) return false;
-      return s.claseId === fichaData.sesion.claseId;
-    })
-    .map((s) => ({
-      id: s.id,
-      label: `${s.clase.nombre} · ${new Date(s.fecha).toLocaleDateString("es-ES")} · ${s.horaInicio}-${s.horaFin} · ${s.clase.sala.nombre}`,
-    }));
+  // Helper: construye Date del inicio real de una sesión para comparar con ahora
+  function getInicioSesionAdmin(fecha: string, horaInicio: string): Date {
+    const [h, m] = horaInicio.split(":").map(Number);
+    const d = new Date(fecha);
+    d.setHours(h, m, 0, 0);
+    return d;
+  }
 
-  const opcionesMoverConvenio = sesiones
-    .filter((s) => {
-      if (!fichaData) return false;
-      const origenKey = `${fichaData.sesion.horarioId}__${toLocalYMD(new Date(fichaData.sesion.fecha))}`;
-      const esMismaKey = s.id === origenKey || (s.sesionId !== null && s.sesionId === fichaData.sesion.id);
-      if (esMismaKey || s.cancelada) return false;
-      return s.claseId !== fichaData.sesion.claseId && clasesConConvenio.has(s.claseId);
-    })
-    .map((s) => ({
-      id: s.id,
-      label: `${s.clase.nombre} · ${new Date(s.fecha).toLocaleDateString("es-ES")} · ${s.horaInicio}-${s.horaFin} · ${s.clase.sala.nombre}`,
-    }));
+  const lunesEstaSemanaMover = getLunesLocal(new Date());
+
+  type OpcionMover = { id: string; label: string; semanaAnterior: boolean };
+
+  function filtrarYMapearOpciones(
+    lista: SesionApi[],
+    origenKey: string,
+    origenSesionId: string | null,
+    filtroClase: (s: SesionApi) => boolean,
+    esSemanaAnterior: boolean,
+  ): OpcionMover[] {
+    const ahora = new Date();
+    return lista
+      .filter((s) => {
+        const esMismaKey = s.id === origenKey || (s.sesionId !== null && s.sesionId === origenSesionId);
+        if (esMismaKey || s.cancelada) return false;
+        if (getInicioSesionAdmin(s.fecha, s.horaInicio) <= ahora) return false;
+        return filtroClase(s);
+      })
+      .map((s) => ({
+        id: s.id,
+        label: `${s.clase.nombre} · ${new Date(s.fecha).toLocaleDateString("es-ES")} · ${s.horaInicio}-${s.horaFin} · ${s.clase.sala.nombre}`,
+        semanaAnterior: esSemanaAnterior,
+      }));
+  }
+
+  const opcionesMoverMismaClase: OpcionMover[] = useMemo(() => {
+    if (!fichaData) return [];
+    const origenKey = `${fichaData.sesion.horarioId}__${toLocalYMD(new Date(fichaData.sesion.fecha))}`;
+    const origenSesionId = fichaData.sesion.id;
+    const filtro = (s: SesionApi) => s.claseId === fichaData.sesion.claseId;
+    const actuales = filtrarYMapearOpciones(sesiones, origenKey, origenSesionId, filtro, false);
+    const anteriores = filtrarYMapearOpciones(sesionesSemanaPasada, origenKey, origenSesionId, filtro, true);
+    // Actuales: orden ascendente; anteriores: orden descendente (más reciente primero)
+    actuales.sort((a, b) => a.label.localeCompare(b.label));
+    anteriores.sort((a, b) => b.label.localeCompare(a.label));
+    return [...actuales, ...anteriores];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fichaData, sesiones, sesionesSemanaPasada, lunesEstaSemanaMover]);
+
+  const opcionesMoverConvenio: OpcionMover[] = useMemo(() => {
+    if (!fichaData) return [];
+    const origenKey = `${fichaData.sesion.horarioId}__${toLocalYMD(new Date(fichaData.sesion.fecha))}`;
+    const origenSesionId = fichaData.sesion.id;
+    const filtro = (s: SesionApi) => s.claseId !== fichaData.sesion.claseId && clasesConConvenio.has(s.claseId);
+    const actuales = filtrarYMapearOpciones(sesiones, origenKey, origenSesionId, filtro, false);
+    const anteriores = filtrarYMapearOpciones(sesionesSemanaPasada, origenKey, origenSesionId, filtro, true);
+    actuales.sort((a, b) => a.label.localeCompare(b.label));
+    anteriores.sort((a, b) => b.label.localeCompare(a.label));
+    return [...actuales, ...anteriores];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fichaData, sesiones, sesionesSemanaPasada, clasesConConvenio, lunesEstaSemanaMover]);
 
   const opcionesMover = [...opcionesMoverMismaClase, ...opcionesMoverConvenio];
 
@@ -509,16 +554,30 @@ export default function SesionesPage() {
                   className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm"
                 >
                   <option value="">Selecciona...</option>
-                  {opcionesMoverMismaClase.length > 0 && (
-                    <optgroup label="Misma clase">
-                      {opcionesMoverMismaClase.map((o) => (
+                  {opcionesMoverMismaClase.some((o) => !o.semanaAnterior) && (
+                    <optgroup label="Misma clase — esta semana">
+                      {opcionesMoverMismaClase.filter((o) => !o.semanaAnterior).map((o) => (
                         <option key={o.id} value={o.id}>{o.label}</option>
                       ))}
                     </optgroup>
                   )}
-                  {opcionesMoverConvenio.length > 0 && (
-                    <optgroup label="Con convenio">
-                      {opcionesMoverConvenio.map((o) => (
+                  {opcionesMoverMismaClase.some((o) => o.semanaAnterior) && (
+                    <optgroup label="Misma clase — semana anterior">
+                      {opcionesMoverMismaClase.filter((o) => o.semanaAnterior).map((o) => (
+                        <option key={o.id} value={o.id}>{o.label}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {opcionesMoverConvenio.some((o) => !o.semanaAnterior) && (
+                    <optgroup label="Con convenio — esta semana">
+                      {opcionesMoverConvenio.filter((o) => !o.semanaAnterior).map((o) => (
+                        <option key={o.id} value={o.id}>{o.label}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {opcionesMoverConvenio.some((o) => o.semanaAnterior) && (
+                    <optgroup label="Con convenio — semana anterior">
+                      {opcionesMoverConvenio.filter((o) => o.semanaAnterior).map((o) => (
                         <option key={o.id} value={o.id}>{o.label}</option>
                       ))}
                     </optgroup>
