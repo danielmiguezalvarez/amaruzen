@@ -198,7 +198,7 @@ export default function ClasesClient() {
 
   async function abrirModal(sesion: Sesion) {
     const bono = getBonoParaSesion(sesion, bonosPorClase);
-    const tieneInscripcionRegular = (sesion.esInscrito || sesion.esInscritoEnClase) && !sesion.esBono;
+    const tieneInscripcionRegular = sesion.esInscrito && !sesion.esBono;
 
     // Decide pestaña por defecto
     const tabInicial: "bono" | "cambio" = bono ? "bono" : "cambio";
@@ -271,13 +271,12 @@ export default function ClasesClient() {
     if (s.cancelada) return;
 
     const bono = getBonoParaSesion(s, bonosPorClase);
-    // Puede abrir el modal si: tiene bono para esta clase, está inscrito en este horario,
-    // o está inscrito en la clase (aunque sea otro horario — para pedir cambio excepcional)
-    const puedeAbrir = !!bono || s.esInscrito || s.esInscritoEnClase;
+    // Puede abrir el modal si: tiene bono para esta clase, o está inscrito en este horario exacto
+    const puedeAbrir = !!bono || s.esInscrito;
     if (!puedeAbrir) return;
 
     // Para inscripción regular (sin bono), solo abrir si la sesión es futura
-    if (!bono && (s.esInscrito || s.esInscritoEnClase)) {
+    if (!bono && s.esInscrito) {
       const fechaSesion = new Date(s.fecha);
       const [h, m] = s.horaInicio.split(":").map(Number);
       fechaSesion.setHours(h, m, 0, 0);
@@ -547,14 +546,14 @@ export default function ClasesClient() {
                             {opciones.mismaClase.map((dest, i) => (
                               <div key={dest.id}>
                                 {dest.semanaAnterior && (i === 0 || !opciones.mismaClase[i - 1].semanaAnterior) && (
-                                  <p className="text-xs text-stone-400 uppercase tracking-wide mt-3 mb-1">Semana anterior</p>
-                                )}
-                                <button onClick={() => solicitarCambio(dest)} disabled={enviando}
-                                  className={`w-full text-left p-3 border rounded-lg hover:border-stone-400 hover:bg-stone-50 transition-colors disabled:opacity-50 ${dest.semanaAnterior ? "border-stone-200 opacity-75" : "border-stone-200"}`}>
-                                  <p className="text-sm font-medium text-stone-800">
-                                    {new Date(dest.fecha).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
-                                  </p>
-                                  <p className="text-xs text-stone-500">{dest.horaInicio} - {dest.horaFin} · {dest.clase.sala.nombre}</p>
+                                   <p className="text-xs text-stone-700 font-semibold uppercase tracking-wide mt-3 mb-1">Semana anterior</p>
+                                 )}
+                                 <button onClick={() => solicitarCambio(dest)} disabled={enviando}
+                                   className={`w-full text-left p-3 border rounded-lg hover:border-stone-400 hover:bg-stone-50 transition-colors disabled:opacity-50 ${dest.semanaAnterior ? "border-stone-200 opacity-75" : "border-stone-200"}`}>
+                                   <p className="text-sm font-medium text-stone-800">
+                                     {new Date(dest.fecha).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+                                   </p>
+                                   <p className="text-xs text-stone-500">{dest.horaInicio} - {dest.horaFin} · {dest.clase.sala.nombre}</p>
                                 </button>
                               </div>
                             ))}
@@ -568,9 +567,9 @@ export default function ClasesClient() {
                           <div className="space-y-2">
                             {opciones.convenio.map((dest, i) => (
                               <div key={dest.id}>
-                                {dest.semanaAnterior && (i === 0 || !opciones.convenio[i - 1].semanaAnterior) && (
-                                  <p className="text-xs text-stone-400 uppercase tracking-wide mt-3 mb-1">Semana anterior</p>
-                                )}
+                                 {dest.semanaAnterior && (i === 0 || !opciones.convenio[i - 1].semanaAnterior) && (
+                                   <p className="text-xs text-stone-700 font-semibold uppercase tracking-wide mt-3 mb-1">Semana anterior</p>
+                                 )}
                                 <button onClick={() => solicitarCambio(dest)} disabled={enviando}
                                   className={`w-full text-left p-3 border rounded-lg hover:border-stone-400 hover:bg-stone-50 transition-colors disabled:opacity-50 ${dest.semanaAnterior ? "border-stone-200 opacity-75" : "border-stone-200"}`}>
                                   <div className="flex items-center gap-2 mb-1">
