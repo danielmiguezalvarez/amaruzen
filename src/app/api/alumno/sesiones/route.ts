@@ -382,6 +382,18 @@ FROM objetivo o
       mismaClase: ordenarOpcionesSesion(mismaClaseUnica).slice(0, 12),
       convenio: ordenarOpcionesSesion(convenioUnico).slice(0, 14),
       conveniosAgotados: conveniosAgotadosInfo,
+      _debug: {
+        claseOrigenId: sesionOrigen.claseId,
+        desde: desde.toISOString(),
+        hasta: hasta.toISOString(),
+        conveniosTotales: convenios.length,
+        conveniosActivosCount: conveniosActivos.length,
+        conveniosAgotadosCount: conveniosAgotados.length,
+        horariosDestinoCount: horariosDestino.length,
+        horariosDestinoIds: horariosDestino.map((h) => ({ id: h.id, clase: h.clase.nombre })),
+        convenioCandCount: convenioCand.length,
+        mismaClaseCandCount: mismaClaseCand.length,
+      },
     };
 
     return NextResponse.json(payload);
