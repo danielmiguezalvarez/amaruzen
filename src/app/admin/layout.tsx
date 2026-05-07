@@ -24,27 +24,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [solicitudesSinLeer, setSolicitudesSinLeer] = useState(0);
   const [cambiosPendientes, setCambiosPendientes] = useState(0);
 
-  useEffect(() => {
-    async function cargarBadges() {
-      try {
-        const [resSol, resCam] = await Promise.all([
-          fetch("/api/admin/solicitudes"),
-          fetch("/api/admin/cambios/badge"),
-        ]);
-        if (resSol.ok) {
-          const data: Array<{ estado: string }> = await resSol.json();
-          setSolicitudesSinLeer(data.filter((s) => s.estado === "PENDIENTE").length);
-        }
-        if (resCam.ok) {
-          const data: { count: number } = await resCam.json();
-          setCambiosPendientes(data.count);
-        }
-      } catch {
-        // silenciar — no bloquear el layout
+  async function cargarBadges() {
+    try {
+      const [resSol, resCam] = await Promise.all([
+        fetch("/api/admin/solicitudes"),
+        fetch("/api/admin/cambios/badge"),
+      ]);
+      if (resSol.ok) {
+        const data: Array<{ estado: string }> = await resSol.json();
+        setSolicitudesSinLeer(data.filter((s) => s.estado === "PENDIENTE").length);
       }
+      if (resCam.ok) {
+        const data: { count: number } = await resCam.json();
+        setCambiosPendientes(data.count);
+      }
+    } catch {
+      // silenciar — no bloquear el layout
     }
+  }
+
+  useEffect(() => {
     cargarBadges();
-  }, [pathname]); // re-fetch al navegar
+    const interval = setInterval(cargarBadges, 30_000);
+    return () => clearInterval(interval);
+  }, [pathname]); // re-fetch al navegar y cada 30s
 
   return (
     <div className="min-h-screen bg-stone-50">

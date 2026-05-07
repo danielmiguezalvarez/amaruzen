@@ -133,8 +133,11 @@ export default function CambiosPage() {
               No hay cambios {filtro !== "TODOS" ? filtro.toLowerCase() + "s" : ""}
             </div>
           ) : (
-            cambiosFiltrados.map((c) => (
-              <div key={c.id} className="bg-white rounded-xl border border-stone-200 p-5">
+            cambiosFiltrados.map((c) => {
+              const esReciente = (Date.now() - new Date(c.createdAt).getTime()) < 24 * 60 * 60 * 1000;
+              const resaltarAprobado = c.estado === "APROBADO" && esReciente;
+              return (
+              <div key={c.id} className={`rounded-xl border p-5 ${c.estado === "PENDIENTE" ? "bg-amber-50 border-amber-300" : resaltarAprobado ? "bg-green-50 border-green-300" : "bg-white border-stone-200"}`}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -183,10 +186,11 @@ export default function CambiosPage() {
                         </button>
                       </div>
                     )}
-                  </div>
-                  </div>
                 </div>
-              ))
+                </div>
+              </div>
+              );
+            })
           )}
         </div>
       )}
