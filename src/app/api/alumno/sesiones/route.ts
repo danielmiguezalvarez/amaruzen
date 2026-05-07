@@ -47,9 +47,9 @@ export async function GET(req: Request) {
 
     const ahora = new Date();
 
-    // Límite inferior: lunes de la semana anterior (permite sesiones no iniciadas de la semana pasada)
-    const lunesEstaSeamana = getLunes(ahora);
-    const lunesSemanaPasada = new Date(lunesEstaSeamana);
+    // Semana de la sesión origen — las opciones "anteriores" son las de la semana previa a esa
+    const lunesSemanaSesion = getLunes(sesionOrigen.fecha);
+    const lunesSemanaPasada = new Date(lunesSemanaSesion);
     lunesSemanaPasada.setDate(lunesSemanaPasada.getDate() - 7);
     const desde = normalizarFecha(lunesSemanaPasada);
 
@@ -320,7 +320,7 @@ FROM objetivo o
         horaFin,
         clase,
         tipoConvenio,
-        semanaAnterior: normalizarFecha(fecha) < lunesEstaSeamana,
+        semanaAnterior: normalizarFecha(fecha) < lunesSemanaSesion,
       }));
 
     const convenio = convenioCand
@@ -337,7 +337,7 @@ FROM objetivo o
         tipoConvenio,
         convenioId,
         requiereAprobacion,
-        semanaAnterior: normalizarFecha(fecha) < lunesEstaSeamana,
+        semanaAnterior: normalizarFecha(fecha) < lunesSemanaSesion,
       }));
 
     const mismaClaseUnica = Array.from(new Map(mismaClase.map((s) => [s.id, s])).values());
