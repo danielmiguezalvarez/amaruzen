@@ -68,6 +68,11 @@ export default function AlumnosPage() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  const [editandoPerfil, setEditandoPerfil] = useState(false);
+  const [editPerfil, setEditPerfil] = useState({ nombre: "", email: "" });
+  const [savingPerfil, setSavingPerfil] = useState(false);
+  const [errorPerfil, setErrorPerfil] = useState("");
+
   const [claseAnadir, setClaseAnadir] = useState("");
   const [modalidadAnadir, setModalidadAnadir] = useState<"SEMANAL" | "BONO">("SEMANAL");
   const [numClases, setNumClases] = useState("1");
@@ -92,6 +97,28 @@ export default function AlumnosPage() {
     const updated = await fetch("/api/admin/alumnos").then((r) => r.json());
     setAlumnos(updated);
     setDetalle(updated.find((a: Alumno) => a.id === alumnoId) || null);
+  }
+
+  async function guardarPerfil() {
+    if (!detalle) return;
+    setSavingPerfil(true);
+    setErrorPerfil("");
+    try {
+      const res = await fetch(`/api/admin/alumnos/${detalle.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre: editPerfil.nombre, email: editPerfil.email }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setErrorPerfil(d.error || "No se pudo guardar");
+        return;
+      }
+      await refrescarDetalle(detalle.id);
+      setEditandoPerfil(false);
+    } finally {
+      setSavingPerfil(false);
+    }
   }
 
   async function crearAlumno(e: React.FormEvent) {
@@ -366,11 +393,50 @@ export default function AlumnosPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between mb-5">
-              <div>
-                <h2 className="text-lg font-semibold text-stone-800">{detalle.name || "Sin nombre"}</h2>
-                <p className="text-sm text-stone-500">{detalle.email}</p>
+              <div className="flex-1 min-w-0">
+                {editandoPerfil ? (
+                  <div className="space-y-2">
+                    {errorPerfil && <p className="text-xs text-red-600">{errorPerfil}</p>}
+                    <input
+                      value={editPerfil.nombre}
+                      onChange={(e) => setEditPerfil({ ...editPerfil, nombre: e.target.value })}
+                      placeholder="Nombre"
+                      className="w-full px-2 py-1 border border-stone-300 rounded text-sm"
+                    />
+                    <input
+                      type="email"
+                      value={editPerfil.email}
+                      onChange={(e) => setEditPerfil({ ...editPerfil, email: e.target.value })}
+                      placeholder="Email"
+                      className="w-full px-2 py-1 border border-stone-300 rounded text-sm"
+                    />
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={guardarPerfil} disabled={savingPerfil}
+                        className="px-3 py-1 text-xs bg-stone-800 text-white rounded hover:bg-stone-700 disabled:opacity-50">
+                        {savingPerfil ? "Guardando..." : "Guardar"}
+                      </button>
+                      <button onClick={() => setEditandoPerfil(false)}
+                        className="px-3 py-1 text-xs border border-stone-300 rounded text-stone-600 hover:bg-stone-50">
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-semibold text-stone-800">{detalle.name || "Sin nombre"}</h2>
+                      <button
+                        onClick={() => { setEditPerfil({ nombre: detalle.name || "", email: detalle.email }); setEditandoPerfil(true); setErrorPerfil(""); }}
+                        className="text-xs text-stone-400 hover:text-stone-600 underline"
+                      >
+                        Editar
+                      </button>
+                    </div>
+                    <p className="text-sm text-stone-500">{detalle.email}</p>
+                  </div>
+                )}
               </div>
-              <button onClick={() => setDetalle(null)} className="text-stone-400 hover:text-stone-600 text-xl leading-none">
+              <button onClick={() => { setDetalle(null); setEditandoPerfil(false); }} className="text-stone-400 hover:text-stone-600 text-xl leading-none ml-4">
                 &times;
               </button>
             </div>
