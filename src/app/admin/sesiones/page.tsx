@@ -36,6 +36,11 @@ type ReservaApi = {
   profesional: { name: string | null };
 };
 
+type FestivoApi = {
+  fecha: string;
+  nombre: string;
+};
+
 type FichaData = {
   ocupacion: { ocupados: number };
   sesion: { id: string | null; aforo: number; horarioId: string; fecha: string; claseId: string };
@@ -77,6 +82,7 @@ export default function SesionesPage() {
   const [salas, setSalas] = useState<SalaLite[]>([]);
   const [sesiones, setSesiones] = useState<SesionApi[]>([]);
   const [reservas, setReservas] = useState<ReservaApi[]>([]);
+  const [festivos, setFestivos] = useState<FestivoApi[]>([]);
 
   const [fichaOpen, setFichaOpen] = useState(false);
   const [fichaTitulo, setFichaTitulo] = useState("");
@@ -117,6 +123,7 @@ export default function SesionesPage() {
       setSalas(data.salas || []);
       setSesiones(data.sesiones || []);
       setReservas(data.reservas || []);
+      setFestivos(data.festivos || []);
     }
     setLoading(false);
   }, []);
@@ -177,8 +184,20 @@ export default function SesionesPage() {
       raw: r,
     }));
 
-    return [...eventosSesiones, ...eventosReservas];
-  }, [sesiones, reservas]);
+    const eventosFestivos = festivos.map((f) => ({
+      id: `festivo_${new Date(f.fecha).toISOString().slice(0, 10)}`,
+      tipo: "FESTIVO" as const,
+      fecha: f.fecha,
+      horaInicio: "00:00",
+      horaFin: "23:59",
+      salaId: "",
+      salaNombre: "",
+      titulo: f.nombre,
+      raw: f,
+    }));
+
+    return [...eventosSesiones, ...eventosReservas, ...eventosFestivos];
+  }, [sesiones, reservas, festivos]);
 
   const dias = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(lunes);
@@ -275,6 +294,25 @@ export default function SesionesPage() {
         sesionOrigenId: origenRef,
       }),
     });
+
+    const refetch = await fetch(`/api/admin/sesiones/ficha?sesionRef=${encodeURIComponent(origenRef)}`);
+    if (refetch.ok) setFichaData(await refetch.json());
+  }
+
+  async function rectificarAusenciaAlumno(alumnoId: string) {
+    if (!fichaData) return;
+    const origenRef = `${fichaData.sesion.horarioId}__${toLocalYMD(new Date(fichaData.sesion.fecha))}`;
+    const res = await fetch("/api/admin/sesiones/ficha", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: alumnoId, sesionRef: origenRef }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || "No se pudo rectificar la ausencia");
+      return;
+    }
 
     const refetch = await fetch(`/api/admin/sesiones/ficha?sesionRef=${encodeURIComponent(origenRef)}`);
     if (refetch.ok) setFichaData(await refetch.json());
@@ -536,6 +574,7 @@ export default function SesionesPage() {
         cargando={fichaLoading}
         onMoverAlumno={abrirMoverAlumno}
         onAusenciaAlumno={marcarAusenciaAlumno}
+        onRectificarAusencia={rectificarAusenciaAlumno}
         onApuntarBono={apuntarBonoAlumno}
         onCancelarBono={cancelarBonoAlumno}
         onEliminarSesion={eliminarSesionActual}

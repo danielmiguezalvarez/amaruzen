@@ -102,6 +102,7 @@ model User {
   role          Role      @default(ALUMNO)
   activo        Boolean   @default(true)
   notificaciones Boolean  @default(false)
+  resetPassword Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -410,6 +411,17 @@ model SolicitudAlta {
   estado      String   @default("PENDIENTE") // "PENDIENTE" | "ACEPTADA" | "DESCARTADA"
   usuarioId   String?  // User creado al aceptar
   createdAt   DateTime @default(now())
+}
+
+model Festivo {
+  id        String   @id @default(cuid())
+  fecha     DateTime @unique
+  nombre    String
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fecha, activo])
 }
 
 model Ausencia {

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma, type DiaSemana } from "@prisma/client";
+import { sendClaseCancelada } from "@/lib/email";
 
 export type SesionCalendario = {
   sesionId: string | null;
@@ -28,6 +29,11 @@ export type ReservaCalendario = {
   sala: { id: string; nombre: string; color: string | null };
   profesional: { id: string; name: string | null; email: string };
   clase: { id: string; nombre: string } | null;
+};
+
+export type FestivoCalendario = {
+  fecha: Date;
+  nombre: string;
 };
 
 export type OcupacionSesion = {
@@ -184,6 +190,7 @@ base AS (
     )
     AND (c."fechaInicio" IS NULL OR f.fecha >= c."fechaInicio"::date)
     AND (c."fechaFin" IS NULL OR f.fecha <= c."fechaFin"::date)
+    AND f.fecha NOT IN (SELECT fecha FROM "Festivo" WHERE activo = true)
 
   UNION ALL
 
@@ -204,6 +211,7 @@ base AS (
     AND h."fecha"::date BETWEEN '${desdeIso}'::date AND '${hastaIso}'::date
     AND (c."fechaInicio" IS NULL OR h."fecha"::date >= c."fechaInicio"::date)
     AND (c."fechaFin" IS NULL OR h."fecha"::date <= c."fechaFin"::date)
+    AND h."fecha"::date NOT IN (SELECT fecha FROM "Festivo" WHERE activo = true)
 )
 INSERT INTO "Sesion" (
   "id",
@@ -251,7 +259,7 @@ export async function calcularSesionesSemana(lunesSemana: Date) {
 
   await upsertSesionesEnRango(lunes, domingo);
 
-  const [sesionesMaterializadas, reservas, salas] = await Promise.all([
+  const [sesionesMaterializadas, reservas, salas, festivos] = await Promise.all([
     prisma.sesion.findMany({
       where: {
         fecha: { gte: lunes, lte: domingo },
@@ -278,6 +286,11 @@ export async function calcularSesionesSemana(lunesSemana: Date) {
       where: { activa: true },
       select: { id: true, nombre: true, aforo: true, color: true },
       orderBy: { nombre: "asc" },
+    }),
+    prisma.festivo.findMany({
+      where: { fecha: { gte: lunes, lte: domingo }, activo: true },
+      select: { fecha: true, nombre: true },
+      orderBy: { fecha: "asc" },
     }),
   ]);
 
@@ -311,7 +324,65 @@ export async function calcularSesionesSemana(lunesSemana: Date) {
     salas,
     sesiones,
     reservas: reservas as ReservaCalendario[],
+    festivos: festivos as FestivoCalendario[],
   };
+}
+
+export async function cancelarSesionesEnFecha(fecha: Date) {
+  const fechaNorm = normalizarFecha(fecha);
+
+  const sesiones = await prisma.sesion.findMany({
+    where: {
+      fecha: fechaNorm,
+      cancelada: false,
+      clase: { activa: true },
+      horario: { activo: true },
+    },
+    select: {
+      id: true,
+      horarioId: true,
+      clase: { select: { nombre: true } },
+    },
+  });
+
+  if (sesiones.length === 0) return 0;
+
+  await prisma.sesion.updateMany({
+    where: { id: { in: sesiones.map((s) => s.id) } },
+    data: { cancelada: true },
+  });
+
+  try {
+    await Promise.all(
+      sesiones.map(async (sesion) => {
+        const inscripciones = await prisma.inscripcionHorario.findMany({
+          where: {
+            horarioId: sesion.horarioId,
+            activa: true,
+            inscripcion: { activa: true },
+          },
+          include: { inscripcion: { include: { user: true } } },
+        });
+
+        await Promise.all(
+          inscripciones.map(async (ih) => {
+            const alumno = ih.inscripcion.user;
+            if (!alumno.notificaciones) return;
+            await sendClaseCancelada({
+              to: alumno.email,
+              nombre: alumno.name || "Alumno",
+              claseNombre: sesion.clase.nombre,
+              fecha: fechaNorm,
+            });
+          })
+        );
+      })
+    );
+  } catch {
+    // Ignore notification errors. Main cancellation is already applied.
+  }
+
+  return sesiones.length;
 }
 
 export async function calcularOcupacionesBatch(

@@ -15,6 +15,7 @@ const navItems = [
   { href: "/admin/cambios", label: "Cambios" },
   { href: "/admin/profesores", label: "Profesores" },
   { href: "/admin/salas", label: "Salas" },
+  { href: "/admin/festivos", label: "Festivos" },
   { href: "/admin/solicitudes", label: "Solicitudes" },
 ];
 

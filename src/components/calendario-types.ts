@@ -2,7 +2,7 @@ export type SalaLite = { id: string; nombre: string; aforo?: number; color?: str
 
 export type EventoCalendario = {
   id: string;
-  tipo: "CLASE" | "RESERVA";
+  tipo: "CLASE" | "RESERVA" | "FESTIVO";
   fecha: string;
   horaInicio: string;
   horaFin: string;

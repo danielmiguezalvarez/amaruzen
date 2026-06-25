@@ -75,6 +75,31 @@ export async function sendClaseCancelada({
   });
 }
 
+export async function sendPasswordResetEmail({
+  to,
+  nombre,
+  nuevaPassword,
+}: {
+  to: string;
+  nombre: string;
+  nuevaPassword: string;
+}) {
+  if (!process.env.RESEND_API_KEY) return;
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: "Tu contraseña ha sido restablecida — Amaruzen",
+    html: `
+      <p>Hola ${nombre},</p>
+      <p>Tu contraseña de acceso a Amaruzen ha sido restablecida.</p>
+      <p>Nueva contraseña temporal: <strong>${nuevaPassword}</strong></p>
+      <p>Por seguridad, cambia esta contraseña al iniciar sesión.</p>
+      <p>Equipo Amaruzen</p>
+    `,
+  });
+}
+
 export async function sendReservaRespondida({
   to, nombre, estado, fecha, sala, horaInicio, horaFin, notas,
 }: {

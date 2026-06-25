@@ -172,6 +172,17 @@ export default function AlumnosPage() {
     await refrescarDetalle(id);
   }
 
+  async function resetearPasswordAlumno(id: string) {
+    if (!confirm("¿Resetear contraseña de este alumno?")) return;
+    const res = await fetch(`/api/admin/alumnos/${id}/reset-password`, { method: "POST" });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || "No se pudo resetear la contraseña");
+      return;
+    }
+    alert("Contraseña restablecida. Se ha enviado un email al alumno.");
+  }
+
   async function anadirInscripcion(alumnoId: string) {
     if (!claseAnadir) return;
     if (modalidadAnadir === "SEMANAL" && horariosSel.length === 0) return;
@@ -430,6 +441,12 @@ export default function AlumnosPage() {
                         className="text-xs text-stone-400 hover:text-stone-600 underline"
                       >
                         Editar
+                      </button>
+                      <button
+                        onClick={() => resetearPasswordAlumno(detalle.id)}
+                        className="text-xs text-amber-600 hover:text-amber-800 underline"
+                      >
+                        Resetear contraseña
                       </button>
                     </div>
                     <p className="text-sm text-stone-500">{detalle.email}</p>

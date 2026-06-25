@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     }
 
     const lunes = getLunes(base);
-    const { domingo, salas, sesiones, reservas } = await calcularSesionesSemana(lunes);
+    const { domingo, salas, sesiones, reservas, festivos } = await calcularSesionesSemana(lunes);
     const ocupaciones = await calcularOcupacionesSemanaBatch(sesiones);
 
     const sesionesConOcupacion = sesiones.map((s) => {
@@ -51,6 +51,7 @@ export async function GET(req: Request) {
       salas,
       sesiones: sesionesConOcupacion,
       reservas,
+      festivos,
     });
   } catch (err) {
     console.error("[ERROR] /api/admin/sesiones/semana", err);

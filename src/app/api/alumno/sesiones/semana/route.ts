@@ -20,7 +20,7 @@ export async function GET(req: Request) {
     }
 
     const lunes = getLunes(base);
-    const { domingo, salas, sesiones, reservas } = await calcularSesionesSemana(lunes);
+    const { domingo, salas, sesiones, reservas, festivos } = await calcularSesionesSemana(lunes);
 
     const inscripciones = await prisma.inscripcionHorario.findMany({
       where: {
@@ -103,6 +103,7 @@ export async function GET(req: Request) {
       salas,
       sesiones: sesionesConFlag,
       reservas,
+      festivos,
       _debug: debug,
     });
   } catch (err) {

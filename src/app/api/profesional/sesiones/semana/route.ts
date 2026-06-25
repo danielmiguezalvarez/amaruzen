@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     }
 
     const lunes = getLunes(base);
-    const { domingo, salas, sesiones, reservas } = await calcularSesionesSemana(lunes);
+    const { domingo, salas, sesiones, reservas, festivos } = await calcularSesionesSemana(lunes);
 
     return NextResponse.json({
       lunes: lunes.toISOString(),
@@ -26,6 +26,7 @@ export async function GET(req: Request) {
       salas,
       sesiones,
       reservas,
+      festivos,
     });
   } catch (err) {
     console.error("[ERROR] /api/profesional/sesiones/semana", err);

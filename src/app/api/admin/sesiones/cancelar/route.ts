@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api-auth";
 import { sendClaseCancelada } from "@/lib/email";
 import {
+  cancelarSesionesEnFecha,
   generarSesionesPorRango,
   normalizarFecha,
   resolverHorarioFechaDesdeRef,
@@ -148,29 +149,13 @@ export async function POST(req: Request) {
   if (!horarioIdBody && inicio && fin) {
     await generarSesionesPorRango(inicio, fin);
 
-    const sesiones = await prisma.sesion.findMany({
-      where: {
-        fecha: { gte: inicio, lte: fin },
-        clase: { activa: true },
-        horario: { activo: true },
-      },
-      select: { horarioId: true, fecha: true },
-    });
-
-    await prisma.sesion.updateMany({
-      where: {
-        fecha: { gte: inicio, lte: fin },
-        clase: { activa: true },
-        horario: { activo: true },
-      },
-      data: { cancelada: true },
-    });
-
-    for (const s of sesiones) {
-      await notificarCancelacion(s.horarioId, s.fecha);
+    const fechas = buildDateRange(inicio, fin);
+    let total = 0;
+    for (const f of fechas) {
+      total += await cancelarSesionesEnFecha(f);
     }
 
-    return NextResponse.json({ ok: true, scope: "cierre_total", total: sesiones.length });
+    return NextResponse.json({ ok: true, scope: "cierre_total", total });
   }
 
   return NextResponse.json({ error: "Parámetros inválidos" }, { status: 400 });

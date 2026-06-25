@@ -32,12 +32,18 @@ type ReservaApi = {
   profesional: { name: string | null };
 };
 
+type FestivoApi = {
+  fecha: string;
+  nombre: string;
+};
+
 export default function ProfesionalCalendarioPage() {
   const [lunes, setLunes] = useState<Date>(() => getLunesLocal(new Date()));
   const [loading, setLoading] = useState(true);
   const [salas, setSalas] = useState<SalaLite[]>([]);
   const [sesiones, setSesiones] = useState<SesionApi[]>([]);
   const [reservas, setReservas] = useState<ReservaApi[]>([]);
+  const [festivos, setFestivos] = useState<FestivoApi[]>([]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState({ salaId: "", fecha: "", horaInicio: "09:00", horaFin: "10:00", motivo: "" });
@@ -53,6 +59,7 @@ export default function ProfesionalCalendarioPage() {
       setSalas(data.salas || []);
       setSesiones(data.sesiones || []);
       setReservas(data.reservas || []);
+      setFestivos(data.festivos || []);
     }
     setLoading(false);
   }, []);
@@ -90,8 +97,20 @@ export default function ProfesionalCalendarioPage() {
       raw: r,
     }));
 
-    return [...clases, ...res];
-  }, [sesiones, reservas]);
+    const festivosEventos = festivos.map((f) => ({
+      id: `festivo_${new Date(f.fecha).toISOString().slice(0, 10)}`,
+      tipo: "FESTIVO" as const,
+      fecha: f.fecha,
+      horaInicio: "00:00",
+      horaFin: "23:59",
+      salaId: "",
+      salaNombre: "",
+      titulo: f.nombre,
+      raw: f,
+    }));
+
+    return [...clases, ...res, ...festivosEventos];
+  }, [sesiones, reservas, festivos]);
 
   const dias = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(lunes);

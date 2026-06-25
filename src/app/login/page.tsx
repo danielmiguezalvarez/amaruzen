@@ -30,6 +30,16 @@ function LoginForm() {
     if (result?.error) {
       setError("Email o contraseña incorrectos, o cuenta pendiente de activación");
     } else {
+      const perfilRes = await fetch("/api/alumno/perfil");
+      if (perfilRes.ok) {
+        const perfilData = await perfilRes.json();
+        if (perfilData?.resetPassword) {
+          router.push("/dashboard/perfil?resetPassword=1");
+          router.refresh();
+          return;
+        }
+      }
+
       const sessionRes = await fetch("/api/auth/session");
       const sessionData = await sessionRes.json();
       const role = (sessionData?.user as { role?: string } | undefined)?.role;

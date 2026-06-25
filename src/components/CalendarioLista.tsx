@@ -52,6 +52,9 @@ export default function CalendarioLista({ lunes, eventos, onClickEvento, onElimi
                     if (ev.tipo === "RESERVA") {
                       badge = "bg-blue-100 text-blue-700";
                       stripe = undefined;
+                    } else if (ev.tipo === "FESTIVO") {
+                      badge = "bg-stone-200 text-stone-700";
+                      stripe = undefined;
                     } else if (ev.cancelada) {
                       badge = "bg-red-100 text-red-700";
                       stripe = undefined;
@@ -71,21 +74,26 @@ export default function CalendarioLista({ lunes, eventos, onClickEvento, onElimi
 
                     const etiqueta = ev.tipo === "RESERVA"
                       ? "Reserva"
+                      : ev.tipo === "FESTIVO"
+                        ? "Festivo"
                       : ev.cancelada ? "Cancelada"
                       : ev.esInscrito ? "Inscrito"
                       : ev.tieneBono ? "Bono"
                       : "Clase";
                   return (
-                    <div key={ev.id} className="w-full px-3 py-2 hover:bg-stone-50 transition-colors" style={stripe}>
+                    <div key={ev.id} className={`w-full px-3 py-2 transition-colors ${ev.tipo === "FESTIVO" ? "bg-stone-100" : "hover:bg-stone-50"}`} style={stripe}>
                       <div className="flex items-start justify-between gap-2">
                         <button
                           type="button"
-                          onClick={() => onClickEvento?.(ev)}
+                          onClick={() => {
+                            if (ev.tipo === "FESTIVO") return;
+                            onClickEvento?.(ev);
+                          }}
                           className="min-w-0 text-left flex-1"
                         >
                           <p className="text-xs font-semibold text-stone-800 truncate">{ev.titulo}</p>
-                          <p className="text-xs text-stone-500 truncate">{ev.horaInicio} - {ev.horaFin}</p>
-                          <p className="text-xs text-stone-400 truncate">{ev.salaNombre}</p>
+                          {ev.tipo !== "FESTIVO" && <p className="text-xs text-stone-500 truncate">{ev.horaInicio} - {ev.horaFin}</p>}
+                          {ev.tipo !== "FESTIVO" && <p className="text-xs text-stone-400 truncate">{ev.salaNombre}</p>}
                           {ev.tipo === "CLASE" && ev.esInscrito && (
                             <p className="text-[10px] text-emerald-700 font-medium">Inscrito</p>
                           )}

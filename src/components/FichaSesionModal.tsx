@@ -25,6 +25,7 @@ type Props = {
   onAusenciaAlumno?: (alumnoId: string) => void;
   onApuntarBono?: (alumnoId: string) => void;
   onCancelarBono?: (alumnoId: string) => void;
+  onRectificarAusencia?: (alumnoId: string) => void;
   onEliminarSesion?: () => void;
 };
 
@@ -51,6 +52,7 @@ export default function FichaSesionModal({
   onAusenciaAlumno,
   onApuntarBono,
   onCancelarBono,
+  onRectificarAusencia,
   onEliminarSesion,
 }: Props) {
   if (!abierto) return null;
@@ -135,7 +137,7 @@ export default function FichaSesionModal({
                             Mover
                           </button>
                         )}
-                        {onAusenciaAlumno && !a.ausente && !a.cambioSaliente && !a.esBono && !a.bonoDisponible && a.esInscrito !== false && (
+                        {onAusenciaAlumno && !a.ausente && !a.cambioSaliente && !a.esBono && !a.bonoDisponible && (a.esInscrito !== false || a.cambioEntrante) && (
                           <button
                             type="button"
                             onClick={() => onAusenciaAlumno(a.id)}
@@ -188,6 +190,15 @@ export default function FichaSesionModal({
                               )}
                             </div>
                             <p className="text-xs text-stone-500">{a.email}</p>
+                            {a.ausente && onRectificarAusencia && (
+                              <button
+                                type="button"
+                                onClick={() => onRectificarAusencia(a.id)}
+                                className="mt-1 text-xs text-stone-500 hover:text-stone-700 underline"
+                              >
+                                Rectificar
+                              </button>
+                            )}
                           </div>
                         </div>
                       </li>

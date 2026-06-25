@@ -31,6 +31,7 @@ function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onEliminarEvento
   const eventosByDiaSala = useMemo(() => {
     const map: Record<string, EventoCalendario[]> = {};
     for (const ev of eventos) {
+      if (ev.tipo === "FESTIVO") continue;
       const fecha = toLocalYMD(new Date(ev.fecha));
       const key = `${fecha}__${ev.salaId}`;
       if (!map[key]) map[key] = [];
@@ -39,6 +40,16 @@ function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onEliminarEvento
     Object.values(map).forEach((list) => {
       list.sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
     });
+    return map;
+  }, [eventos]);
+
+  const festivoByDia = useMemo(() => {
+    const map: Record<string, EventoCalendario> = {};
+    for (const ev of eventos) {
+      if (ev.tipo !== "FESTIVO") continue;
+      const fecha = toLocalYMD(new Date(ev.fecha));
+      map[fecha] = ev;
+    }
     return map;
   }, [eventos]);
 
@@ -71,7 +82,12 @@ function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onEliminarEvento
           {dias.map((dia) => {
             const fecha = toLocalYMD(dia);
             return (
-              <div key={fecha} className="border-r border-stone-100 last:border-r-0">
+              <div key={fecha} className="relative border-r border-stone-100 last:border-r-0">
+                {festivoByDia[fecha] && (
+                  <div className="absolute inset-x-0 top-7 bottom-0 flex items-center justify-center bg-stone-100/80 z-10 pointer-events-none">
+                    <span className="text-stone-500 text-sm font-medium rotate-[-20deg]">{festivoByDia[fecha].titulo}</span>
+                  </div>
+                )}
                 <div className="grid" style={{ gridTemplateColumns: `repeat(${Math.max(salas.length, 1)}, minmax(0, 1fr))` }}>
                   {salas.map((sala) => {
                     const key = `${fecha}__${sala.id}`;

@@ -60,6 +60,11 @@ type Reserva = {
   profesional: { name: string | null };
 };
 
+type Festivo = {
+  fecha: string;
+  nombre: string;
+};
+
 // Determina si una sesión tiene bono disponible para el alumno
 function getBonoParaSesion(sesion: Sesion, bonosPorClase: Map<string, BonoAlumno>): BonoAlumno | null {
   return bonosPorClase.get(sesion.clase.id) ?? null;
@@ -89,6 +94,7 @@ export default function ClasesClient() {
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [salas, setSalas] = useState<SalaLite[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
+  const [festivos, setFestivos] = useState<Festivo[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal sesión (bono + cambio de horario)
@@ -121,6 +127,7 @@ export default function ClasesClient() {
       setSesiones(data.sesiones);
       setSalas(data.salas || []);
       setReservas(data.reservas || []);
+      setFestivos(data.festivos || []);
     }
     const bonosRes = await fetch("/api/alumno/bono");
     if (bonosRes.ok) {
@@ -320,6 +327,17 @@ export default function ClasesClient() {
       titulo: "Reserva",
       subtitulo: r.profesional.name || "Profesional",
       raw: r,
+    })),
+    ...festivos.map((f) => ({
+      id: `festivo_${new Date(f.fecha).toISOString().slice(0, 10)}`,
+      tipo: "FESTIVO" as const,
+      fecha: f.fecha,
+      horaInicio: "00:00",
+      horaFin: "23:59",
+      salaId: "",
+      salaNombre: "",
+      titulo: f.nombre,
+      raw: f,
     })),
   ];
 
