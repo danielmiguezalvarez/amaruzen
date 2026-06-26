@@ -5,11 +5,9 @@ import { cancelarSesionesEnFecha } from "@/lib/sesiones";
 
 function parseDate(value: string | null | undefined) {
   if (!value) return null;
-  const partes = value.split("-");
-  if (partes.length !== 3) return null;
-  const [y, m, d] = partes.map(Number);
+  const [y, m, d] = value.split("-").map(Number);
   if ([y, m, d].some(Number.isNaN)) return null;
-  return new Date(y, m - 1, d);
+  return new Date(Date.UTC(y, m - 1, d));
 }
 
 export async function GET() {

@@ -190,7 +190,7 @@ base AS (
     )
     AND (c."fechaInicio" IS NULL OR f.fecha >= c."fechaInicio"::date)
     AND (c."fechaFin" IS NULL OR f.fecha <= c."fechaFin"::date)
-    AND f.fecha NOT IN (SELECT fecha FROM "Festivo" WHERE activo = true)
+    AND f.fecha NOT IN (SELECT fecha::date FROM "Festivo" WHERE activo = true)
 
   UNION ALL
 
@@ -211,7 +211,7 @@ base AS (
     AND h."fecha"::date BETWEEN '${desdeIso}'::date AND '${hastaIso}'::date
     AND (c."fechaInicio" IS NULL OR h."fecha"::date >= c."fechaInicio"::date)
     AND (c."fechaFin" IS NULL OR h."fecha"::date <= c."fechaFin"::date)
-    AND h."fecha"::date NOT IN (SELECT fecha FROM "Festivo" WHERE activo = true)
+    AND h."fecha"::date NOT IN (SELECT fecha::date FROM "Festivo" WHERE activo = true)
 )
 INSERT INTO "Sesion" (
   "id",
@@ -329,11 +329,12 @@ export async function calcularSesionesSemana(lunesSemana: Date) {
 }
 
 export async function cancelarSesionesEnFecha(fecha: Date) {
-  const fechaNorm = normalizarFecha(fecha);
+  const inicio = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()));
+  const fin = new Date(inicio.getTime() + 86400000);
 
   const sesiones = await prisma.sesion.findMany({
     where: {
-      fecha: fechaNorm,
+      fecha: { gte: inicio, lt: fin },
       cancelada: false,
       clase: { activa: true },
       horario: { activo: true },
@@ -372,7 +373,7 @@ export async function cancelarSesionesEnFecha(fecha: Date) {
               to: alumno.email,
               nombre: alumno.name || "Alumno",
               claseNombre: sesion.clase.nombre,
-              fecha: fechaNorm,
+              fecha: inicio,
             });
           })
         );
