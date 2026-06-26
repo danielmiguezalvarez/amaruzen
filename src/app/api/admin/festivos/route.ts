@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
-import { cancelarSesionesEnFecha, normalizarFecha } from "@/lib/sesiones";
+import { cancelarSesionesEnFecha } from "@/lib/sesiones";
 
 function parseDate(value: string | null | undefined) {
   if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return normalizarFecha(d);
+  const partes = value.split("-");
+  if (partes.length !== 3) return null;
+  const [y, m, d] = partes.map(Number);
+  if ([y, m, d].some(Number.isNaN)) return null;
+  return new Date(y, m - 1, d);
 }
 
 export async function GET() {
