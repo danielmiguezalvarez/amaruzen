@@ -50,5 +50,10 @@ export async function POST(req: Request) {
 
   const sesionesCanceladas = await cancelarSesionesEnFecha(fechaNorm);
 
-  return NextResponse.json({ ok: true, festivo, sesionesCanceladas }, { status: 201 });
+  return NextResponse.json({
+    ok: true,
+    festivo,
+    sesionesCanceladas,
+    _debug: { fechaNorm: fechaNorm.toISOString() },
+  }, { status: 201 });
 }

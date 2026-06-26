@@ -190,7 +190,7 @@ base AS (
     )
     AND (c."fechaInicio" IS NULL OR f.fecha >= c."fechaInicio"::date)
     AND (c."fechaFin" IS NULL OR f.fecha <= c."fechaFin"::date)
-    AND f.fecha NOT IN (SELECT fecha::date FROM "Festivo" WHERE activo = true)
+    AND f.fecha NOT IN (SELECT (fecha AT TIME ZONE 'UTC')::date FROM "Festivo" WHERE activo = true)
 
   UNION ALL
 
@@ -211,7 +211,7 @@ base AS (
     AND h."fecha"::date BETWEEN '${desdeIso}'::date AND '${hastaIso}'::date
     AND (c."fechaInicio" IS NULL OR h."fecha"::date >= c."fechaInicio"::date)
     AND (c."fechaFin" IS NULL OR h."fecha"::date <= c."fechaFin"::date)
-    AND h."fecha"::date NOT IN (SELECT fecha::date FROM "Festivo" WHERE activo = true)
+    AND h."fecha"::date NOT IN (SELECT (fecha AT TIME ZONE 'UTC')::date FROM "Festivo" WHERE activo = true)
 )
 INSERT INTO "Sesion" (
   "id",
