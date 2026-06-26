@@ -111,7 +111,7 @@ function CalendarioGrid({ lunes, salas, eventos, onClickEvento, onEliminarEvento
                         <div
                           className="relative"
                           style={{ height: `${GRID_HEIGHT}px` }}
-                          onClick={onClickHueco ? (e) => {
+                          onClick={onClickHueco && !festivoByDia[fecha] ? (e) => {
                             const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
                             const hora = snapToHour(e.clientY, rect);
                             onClickHueco({ fecha, salaId: sala.id, hora });

@@ -357,9 +357,31 @@ export async function cancelarSesionesEnFecha(fecha: Date) {
 
   if (sesiones.length === 0) return 0;
 
-  await prisma.sesion.updateMany({
-    where: { id: { in: sesiones.map((s) => s.id) } },
-    data: { cancelada: true },
+  const sesionIds = sesiones.map((s) => s.id);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.sesion.updateMany({
+      where: { id: { in: sesionIds } },
+      data: { cancelada: true },
+    });
+
+    const usosBono = await tx.usoBonoSesion.findMany({
+      where: { sesionId: { in: sesionIds }, activo: true },
+      select: { id: true, inscripcionId: true },
+    });
+
+    if (usosBono.length > 0) {
+      await tx.usoBonoSesion.updateMany({
+        where: { id: { in: usosBono.map((u) => u.id) } },
+        data: { activo: false },
+      });
+      for (const u of usosBono) {
+        await tx.inscripcion.update({
+          where: { id: u.inscripcionId },
+          data: { creditosDisponibles: { increment: 1 } },
+        });
+      }
+    }
   });
 
   try {
