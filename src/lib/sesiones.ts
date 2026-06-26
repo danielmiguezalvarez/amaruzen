@@ -259,7 +259,21 @@ export async function calcularSesionesSemana(lunesSemana: Date) {
 
   await upsertSesionesEnRango(lunes, domingo);
 
-  const [sesionesMaterializadas, reservas, salas, festivos] = await Promise.all([
+  const festivos = await prisma.festivo.findMany({
+    where: { fecha: { gte: lunes, lte: domingo }, activo: true },
+    select: { fecha: true, nombre: true },
+    orderBy: { fecha: "asc" },
+  });
+
+  for (const f of festivos) {
+    const inicio = new Date(Date.UTC(f.fecha.getUTCFullYear(), f.fecha.getUTCMonth(), f.fecha.getUTCDate()));
+    const fin = new Date(inicio.getTime() + 86400000);
+    await prisma.sesion.deleteMany({
+      where: { fecha: { gte: inicio, lt: fin } },
+    });
+  }
+
+  const [sesionesMaterializadas, reservas, salas] = await Promise.all([
     prisma.sesion.findMany({
       where: {
         fecha: { gte: lunes, lte: domingo },
@@ -286,11 +300,6 @@ export async function calcularSesionesSemana(lunesSemana: Date) {
       where: { activa: true },
       select: { id: true, nombre: true, aforo: true, color: true },
       orderBy: { nombre: "asc" },
-    }),
-    prisma.festivo.findMany({
-      where: { fecha: { gte: lunes, lte: domingo }, activo: true },
-      select: { fecha: true, nombre: true },
-      orderBy: { fecha: "asc" },
     }),
   ]);
 
