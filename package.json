@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "screenshots:demo": "node scripts/demo/run.mjs"
+    "screenshots:demo": "node scripts/demo/run.mjs",
+    "screenshots:demo:professional": "node scripts/demo/run.mjs --professional-only"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",

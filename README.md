@@ -14,13 +14,15 @@ El comando `npm run screenshots:demo` levanta una instancia PostgreSQL desechabl
 - `02-calendario-salas.png`: calendario semanal con clases, ocupación y reservas en dos salas.
 - `03-reservas.png`: solicitudes de reserva en distintos estados.
 - `04-alumnos-cambios.png`: coordinación de cambios solicitados por alumnos.
-- `05-calendario-profesional.png`: calendario de una cuenta profesional.
+- `05-calendario-profesional.png`: calendario profesional con la solicitud de reserva abierta en un hueco libre.
 
 ### Requisitos y ejecución
 
 1. Instala Node.js 20+ y npm. Docker Compose es opcional; también puede usarse PostgreSQL local.
 2. Ejecuta `npm install` y `npx playwright install chromium`.
 3. Ejecuta `npm run screenshots:demo`.
+
+Para regenerar únicamente la quinta captura sin sobrescribir las demás, ejecuta `npm run screenshots:demo:professional`.
 
 El script no utiliza `.env`, `.env.local` ni `.env.development*`: si encuentra archivos de entorno en la raíz o variables heredadas de base de datos, NextAuth o Resend, aborta. Genera un secreto NextAuth efímero, inicia el servidor solo en loopback y deshabilita Resend. Si hay Docker Compose disponible, solo acepta un contexto Docker local y usa `127.0.0.1:55439/amaruzen_demo`, con los datos en `tmpfs` y eliminación del contenedor al terminar. Si no hay Docker, usa PGlite (PostgreSQL en memoria) detrás de un socket PostgreSQL enlazado exclusivamente a `127.0.0.1:55439`; al terminar cierra el socket y destruye la base volátil. Opcionalmente, define `AMARUZEN_DEMO_POSTGRES_URL` con una URL a `localhost/postgres` y un usuario local con permiso `CREATEDB`; el script crea una base aleatoria para esa ejecución y la elimina al terminar. Nunca se admite una URL remota ni la URL de la base de la aplicación.
 

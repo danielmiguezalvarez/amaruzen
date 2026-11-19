@@ -192,6 +192,11 @@ async function dropLocalDemoDatabase(adminUrl, databaseName) {
 }
 
 async function main() {
+  const args = process.argv.slice(2);
+  if (args.some((arg) => arg !== "--professional-only")) {
+    throw new Error("Argumento no reconocido. Usa --professional-only para actualizar solo la captura profesional.");
+  }
+  const professionalOnly = args.includes("--professional-only");
   await assertIsolatedEnvironment();
   for (const file of [prismaCli, nextCli]) {
     await access(file);
@@ -264,8 +269,10 @@ async function main() {
       windowsHide: true,
     });
     await waitForApp(`http://127.0.0.1:${port}`, server);
-    await generateCaptures(`http://127.0.0.1:${port}`);
-    console.log("Capturas generadas en docs/screenshots/ con la aplicación real y datos ficticios.");
+    await generateCaptures(`http://127.0.0.1:${port}`, { professionalOnly });
+    console.log(professionalOnly
+      ? "Captura profesional generada en docs/screenshots/ con la aplicación real y datos ficticios."
+      : "Capturas generadas en docs/screenshots/ con la aplicación real y datos ficticios.");
   } finally {
     if (server && server.exitCode === null) {
       server.kill();
