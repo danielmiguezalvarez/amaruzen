@@ -50,12 +50,12 @@ export async function generateCaptures(baseUrl) {
     await capture(adminPage, "01-panel-admin.png", {
       path: "/admin",
       heading: "Panel de gestión",
-      requiredText: ["Sesiones de hoy", "Cambios pendientes", "Sofía Vega", "Vinyasa de la mañana"],
+      requiredText: ["Sesiones de hoy", "Cambios pendientes", "Sofía Vega", "Vinyasa"],
     }, baseUrl);
     await capture(adminPage, "02-calendario-salas.png", {
       path: "/admin/sesiones",
       heading: "Calendario",
-      requiredText: ["Sala Alba", "Sala Brisa", "Vinyasa de la mañana", "Reserva"],
+      requiredText: ["Sala Alba", "Sala Brisa", "Vinyasa", "Reserva"],
     }, baseUrl);
     await capture(adminPage, "03-reservas.png", {
       path: "/admin/reservas",
@@ -65,7 +65,7 @@ export async function generateCaptures(baseUrl) {
     await capture(adminPage, "04-alumnos-cambios.png", {
       path: "/admin/cambios",
       heading: "Cambios de sesión",
-      requiredText: ["Sofía Vega", "Pendiente", "Vinyasa de la mañana"],
+      requiredText: ["Sofía Vega", "Pendiente", "Vinyasa"],
     }, baseUrl);
     await adminContext.close();
 
@@ -81,7 +81,7 @@ export async function generateCaptures(baseUrl) {
     await capture(professionalPage, "05-calendario-profesional.png", {
       path: "/profesional/calendario",
       heading: "Calendario",
-      requiredText: ["Vinyasa de la mañana", "Sala Alba"],
+      requiredText: ["Vinyasa", "Sala Alba"],
     }, baseUrl);
     await professionalContext.close();
 

@@ -21,6 +21,8 @@
     "resend": "^6.10.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.17",
+    "@electric-sql/pglite-socket": "^0.2.20",
     "@netlify/plugin-nextjs": "^5.15.9",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",

@@ -8,13 +8,19 @@ const isDockerDemo =
   databaseUrl.port === "55439" &&
   databaseUrl.pathname === "/amaruzen_demo" &&
   databaseUrl.username === "demo";
+const isPGliteDemo =
+  databaseUrl.hostname === "127.0.0.1" &&
+  databaseUrl.port === "55439" &&
+  databaseUrl.pathname === "/postgres" &&
+  databaseUrl.username === "postgres" &&
+  databaseUrl.searchParams.get("sslmode") === "disable";
 const isTemporaryLocalDemo =
   ["localhost", "127.0.0.1", "[::1]"].includes(databaseUrl.hostname) &&
   /^\/amaruzen_demo_[a-f0-9]{12}$/.test(databaseUrl.pathname);
 
 if (
   databaseUrl.protocol !== "postgresql:" ||
-  (!isDockerDemo && !isTemporaryLocalDemo) ||
+  (!isDockerDemo && !isPGliteDemo && !isTemporaryLocalDemo) ||
   directUrl.href !== databaseUrl.href ||
   process.env.RESEND_API_KEY
 ) {
@@ -35,9 +41,9 @@ const fechaDia = (offset) => {
 const dias = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"];
 const adminId = "demo-admin";
 const profesores = [
-  { id: "demo-prof-ana", userId: "demo-user-ana", nombre: "Ana Soler", email: "ana.soler@demo.amaruzen.invalid" },
-  { id: "demo-prof-leo", userId: "demo-user-leo", nombre: "Leo Martín", email: "leo.martin@demo.amaruzen.invalid" },
-  { id: "demo-prof-noa", userId: "demo-user-noa", nombre: "Noa Vidal", email: "noa.vidal@demo.amaruzen.invalid" },
+  { id: "demo-prof-ana", userId: "demo-user-ana", nombre: "Ana", userName: "Ana Soler", email: "ana.soler@demo.amaruzen.invalid" },
+  { id: "demo-prof-leo", userId: "demo-user-leo", nombre: "Leo", userName: "Leo Martín", email: "leo.martin@demo.amaruzen.invalid" },
+  { id: "demo-prof-noa", userId: "demo-user-noa", nombre: "Noa", userName: "Noa Vidal", email: "noa.vidal@demo.amaruzen.invalid" },
 ];
 const nombresAlumnos = [
   "Sofía Vega", "Mateo Ríos", "Clara Montes", "Hugo Serra", "Irene Sol", "Gael Prieto",
@@ -51,15 +57,15 @@ const alumnos = Array.from({ length: nombresAlumnos.length }, (_, index) => ({
   name: nombresAlumnos[index],
 }));
 const clases = [
-  { id: "demo-class-lunes-am", nombre: "Vinyasa de la mañana", dia: 0, horaInicio: "09:00", horaFin: "10:00", salaId: "demo-sala-alba", profesorId: profesores[0].id, aforo: 14, color: "#0f766e" },
-  { id: "demo-class-lunes-pm", nombre: "Movilidad y equilibrio", dia: 0, horaInicio: "18:00", horaFin: "19:00", salaId: "demo-sala-brisa", profesorId: profesores[1].id, aforo: 12, color: "#7c3aed" },
-  { id: "demo-class-martes-am", nombre: "Hatha esencial", dia: 1, horaInicio: "09:30", horaFin: "10:30", salaId: "demo-sala-brisa", profesorId: profesores[2].id, aforo: 12, color: "#2563eb" },
-  { id: "demo-class-martes-pm", nombre: "Yoga restaurativo", dia: 1, horaInicio: "17:30", horaFin: "18:30", salaId: "demo-sala-alba", profesorId: profesores[0].id, aforo: 14, color: "#be185d" },
-  { id: "demo-class-miercoles", nombre: "Fuerza consciente", dia: 2, horaInicio: "10:00", horaFin: "11:00", salaId: "demo-sala-alba", profesorId: profesores[1].id, aforo: 14, color: "#ea580c" },
-  { id: "demo-class-jueves", nombre: "Vinyasa intermedio", dia: 3, horaInicio: "18:00", horaFin: "19:00", salaId: "demo-sala-brisa", profesorId: profesores[2].id, aforo: 12, color: "#0891b2" },
-  { id: "demo-class-viernes", nombre: "Pausa y respiración", dia: 4, horaInicio: "09:00", horaFin: "10:00", salaId: "demo-sala-alba", profesorId: profesores[0].id, aforo: 14, color: "#65a30d" },
-  { id: "demo-class-sabado", nombre: "Yoga en familia", dia: 5, horaInicio: "10:30", horaFin: "11:30", salaId: "demo-sala-brisa", profesorId: profesores[1].id, aforo: 12, color: "#c2410c" },
-  { id: "demo-class-domingo", nombre: "Estiramientos suaves", dia: 6, horaInicio: "11:00", horaFin: "12:00", salaId: "demo-sala-alba", profesorId: profesores[2].id, aforo: 14, color: "#4f46e5" },
+  { id: "demo-class-lunes-am", nombre: "Vinyasa", dia: 0, horaInicio: "09:00", horaFin: "10:00", salaId: "demo-sala-alba", profesorId: profesores[0].id, aforo: 14, color: "#0f766e" },
+  { id: "demo-class-lunes-pm", nombre: "Movimiento", dia: 0, horaInicio: "18:00", horaFin: "19:00", salaId: "demo-sala-brisa", profesorId: profesores[1].id, aforo: 12, color: "#7c3aed" },
+  { id: "demo-class-martes-am", nombre: "Hatha", dia: 1, horaInicio: "09:30", horaFin: "10:30", salaId: "demo-sala-brisa", profesorId: profesores[2].id, aforo: 12, color: "#2563eb" },
+  { id: "demo-class-martes-pm", nombre: "Relax", dia: 1, horaInicio: "17:30", horaFin: "18:30", salaId: "demo-sala-alba", profesorId: profesores[0].id, aforo: 14, color: "#be185d" },
+  { id: "demo-class-miercoles", nombre: "Fuerza", dia: 2, horaInicio: "10:00", horaFin: "11:00", salaId: "demo-sala-alba", profesorId: profesores[1].id, aforo: 14, color: "#ea580c" },
+  { id: "demo-class-jueves", nombre: "Vinyasa", dia: 3, horaInicio: "18:00", horaFin: "19:00", salaId: "demo-sala-brisa", profesorId: profesores[2].id, aforo: 12, color: "#0891b2" },
+  { id: "demo-class-viernes", nombre: "Respira", dia: 4, horaInicio: "09:00", horaFin: "10:00", salaId: "demo-sala-alba", profesorId: profesores[0].id, aforo: 14, color: "#65a30d" },
+  { id: "demo-class-sabado", nombre: "Familia", dia: 5, horaInicio: "10:30", horaFin: "11:30", salaId: "demo-sala-brisa", profesorId: profesores[1].id, aforo: 12, color: "#c2410c" },
+  { id: "demo-class-domingo", nombre: "Estirar", dia: 6, horaInicio: "11:00", horaFin: "12:00", salaId: "demo-sala-alba", profesorId: profesores[2].id, aforo: 14, color: "#4f46e5" },
 ];
 const horarios = clases.map((clase) => ({ ...clase, id: `demo-horario-${clase.id.slice("demo-class-".length)}` }));
 
@@ -89,7 +95,7 @@ try {
     await prisma.user.create({
       data: {
         id: profesor.userId,
-        name: profesor.nombre,
+        name: profesor.userName,
         email: profesor.email,
         password,
         role: "PROFESIONAL",
@@ -190,7 +196,7 @@ try {
   ];
   await prisma.cambio.createMany({
     data: cambios.map((cambio, index) => ({
-      id: `demo-cambio-${index + 1}`,
+      id: `dcambio${index + 1}`,
       userId: cambio.alumnoId,
       sesionOrigenId: `demo-session-${cambio.origenSesion}`,
       sesionDestinoId: `demo-session-${cambio.destinoSesion}`,
@@ -204,6 +210,7 @@ try {
     { id: "demo-reserva-pendiente", salaId: "demo-sala-alba", profesionalId: profesores[1].userId, estado: "PENDIENTE", motivo: "Taller de respiración", fecha: fechaDia(fechasReserva[0]), horaInicio: "12:00", horaFin: "13:00" },
     { id: "demo-reserva-aprobada", salaId: "demo-sala-brisa", profesionalId: profesores[2].userId, estado: "APROBADA", motivo: "Sesión individual", fecha: fechaDia(fechasReserva[1]), horaInicio: "15:00", horaFin: "16:00" },
     { id: "demo-reserva-rechazada", salaId: "demo-sala-alba", profesionalId: profesores[1].userId, estado: "RECHAZADA", motivo: "Encuentro de bienestar", fecha: fechaDia(fechasReserva[2]), horaInicio: "13:00", horaFin: "14:00" },
+    { id: "demo-reserva-aprobada-2", salaId: "demo-sala-brisa", profesionalId: profesores[0].userId, estado: "APROBADA", motivo: "Práctica abierta", fecha: fechaDia(4), horaInicio: "13:00", horaFin: "14:00" },
   ];
   await prisma.reserva.createMany({ data: reservas });
 

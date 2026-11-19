@@ -12,6 +12,7 @@ const prismaCli = join(root, "node_modules", "prisma", "build", "index.js");
 const nextCli = join(root, "node_modules", "next", "dist", "bin", "next");
 const projectName = `amaruzen-demo-${process.pid}`;
 const dockerDatabaseUrl = "postgresql://demo:demo-only-local@127.0.0.1:55439/amaruzen_demo?schema=public";
+const pgliteDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:55439/postgres?schema=public&connection_limit=1&sslmode=disable&pgbouncer=true";
 const inheritedSensitiveVariables = [
   "DATABASE_URL",
   "DIRECT_URL",
@@ -202,12 +203,19 @@ async function main() {
   const adminUrl = dockerAvailable || !process.env.AMARUZEN_DEMO_POSTGRES_URL
     ? null
     : assertLocalAdminUrl(process.env.AMARUZEN_DEMO_POSTGRES_URL);
+  const usePGlite = !dockerAvailable && !adminUrl;
   const localDatabaseName = adminUrl
     ? `amaruzen_demo_${randomBytes(6).toString("hex")}`
     : null;
-  const initialDatabaseUrl = adminUrl ? adminUrl.href : dockerDatabaseUrl;
+  const initialDatabaseUrl = adminUrl
+    ? adminUrl.href
+    : dockerAvailable
+      ? dockerDatabaseUrl
+      : pgliteDatabaseUrl;
   const appEnv = cleanEnvironment(port, initialDatabaseUrl);
   let server;
+  let pgliteDatabase;
+  let pgliteServer;
   let composeStarted = false;
   let localDatabaseCreated = false;
 
@@ -220,20 +228,34 @@ async function main() {
       await docker(["up", "--detach"], dockerEnv);
       await waitForDatabase(dockerEnv);
     } else {
-      if (!adminUrl) {
-        throw new Error("Docker Compose no está disponible. Actívalo o define AMARUZEN_DEMO_POSTGRES_URL con acceso CREATEDB a localhost/postgres; no se admite una base remota.");
+      if (adminUrl) {
+        await createLocalDemoDatabase(adminUrl, localDatabaseName);
+        localDatabaseCreated = true;
+        const localDemoUrl = new URL(adminUrl);
+        localDemoUrl.pathname = `/${localDatabaseName}`;
+        localDemoUrl.searchParams.set("schema", "public");
+        appEnv.DATABASE_URL = localDemoUrl.href;
+        appEnv.DIRECT_URL = localDemoUrl.href;
+      } else if (usePGlite) {
+        await ensurePortAvailable(55439);
+        const [{ PGlite }, { PGLiteSocketServer }] = await Promise.all([
+          import("@electric-sql/pglite"),
+          import("@electric-sql/pglite-socket"),
+        ]);
+        pgliteDatabase = new PGlite();
+        await pgliteDatabase.waitReady;
+        pgliteServer = new PGLiteSocketServer({
+          db: pgliteDatabase,
+          host: "127.0.0.1",
+          port: 55439,
+          maxConnections: 10,
+        });
+        await pgliteServer.start();
       }
-      await createLocalDemoDatabase(adminUrl, localDatabaseName);
-      localDatabaseCreated = true;
-      const localDemoUrl = new URL(adminUrl);
-      localDemoUrl.pathname = `/${localDatabaseName}`;
-      localDemoUrl.searchParams.set("schema", "public");
-      appEnv.DATABASE_URL = localDemoUrl.href;
-      appEnv.DIRECT_URL = localDemoUrl.href;
     }
 
     await run(process.execPath, [prismaCli, "db", "push", "--skip-generate"], { env: appEnv });
-    await run(process.execPath, [process.execPath, join(root, "scripts", "demo", "seed.mjs")], { env: appEnv });
+    await run(process.execPath, [join(root, "scripts", "demo", "seed.mjs")], { env: appEnv });
 
     server = spawn(process.execPath, [nextCli, "dev", "--hostname", "127.0.0.1", "--port", String(port)], {
       cwd: root,
@@ -263,6 +285,12 @@ async function main() {
     }
     if (localDatabaseCreated) {
       await dropLocalDemoDatabase(adminUrl, localDatabaseName);
+    }
+    if (pgliteServer) {
+      await pgliteServer.stop();
+    }
+    if (pgliteDatabase) {
+      await pgliteDatabase.close();
     }
   }
 }
