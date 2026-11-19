@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Amaruzen
 
-## Getting Started
+Aplicación de gestión para un centro de yoga: clases, alumnos, sesiones, cambios y reservas de salas.
 
-First, run the development server:
+## Desarrollo local
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Requisitos: Node.js 20 o posterior, npm y PostgreSQL. Instala dependencias con `npm install`, configura las variables Prisma/NextAuth en un archivo de entorno local y ejecuta `npm run dev`. No compartas archivos `.env*`.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Capturas reales con datos demo
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+El comando `npm run screenshots:demo` levanta una instancia PostgreSQL desechable con Docker Compose, sincroniza el esquema Prisma, crea datos sintéticos, inicia la aplicación real y captura las pantallas con Playwright a 1440 × 900. Las imágenes se guardan en `docs/screenshots/`:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `01-panel-admin.png`: resumen de alumnos, clases, sesiones y cambios.
+- `02-calendario-salas.png`: calendario semanal con clases, ocupación y reservas en dos salas.
+- `03-reservas.png`: solicitudes de reserva en distintos estados.
+- `04-alumnos-cambios.png`: coordinación de cambios solicitados por alumnos.
+- `05-calendario-profesional.png`: calendario profesional con la solicitud de reserva abierta en un hueco libre.
 
-## Learn More
+### Requisitos y ejecución
 
-To learn more about Next.js, take a look at the following resources:
+1. Instala Node.js 20+ y npm. Docker Compose es opcional; también puede usarse PostgreSQL local.
+2. Ejecuta `npm install` y `npx playwright install chromium`.
+3. Ejecuta `npm run screenshots:demo`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Para regenerar únicamente la quinta captura sin sobrescribir las demás, ejecuta `npm run screenshots:demo:professional`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+El script no utiliza `.env`, `.env.local` ni `.env.development*`: si encuentra archivos de entorno en la raíz o variables heredadas de base de datos, NextAuth o Resend, aborta. Genera un secreto NextAuth efímero, inicia el servidor solo en loopback y deshabilita Resend. Si hay Docker Compose disponible, solo acepta un contexto Docker local y usa `127.0.0.1:55439/amaruzen_demo`, con los datos en `tmpfs` y eliminación del contenedor al terminar. Si no hay Docker, usa PGlite (PostgreSQL en memoria) detrás de un socket PostgreSQL enlazado exclusivamente a `127.0.0.1:55439`; al terminar cierra el socket y destruye la base volátil. Opcionalmente, define `AMARUZEN_DEMO_POSTGRES_URL` con una URL a `localhost/postgres` y un usuario local con permiso `CREATEDB`; el script crea una base aleatoria para esa ejecución y la elimina al terminar. Nunca se admite una URL remota ni la URL de la base de la aplicación.
 
-## Deploy on Vercel
+La seed solo inserta datos si todas las tablas de la base desechable están vacías; aborta sin modificar datos si encuentra filas. Usa nombres y direcciones `.invalid` ficticios; no importes datos reales. Credenciales locales de automatización: `admin@demo.amaruzen.invalid` y `ana.soler@demo.amaruzen.invalid`, con contraseña `Amaruzen-demo-solo-local-2026`. Solo sirven dentro de la ejecución local de capturas; el servidor no se expone a la red.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Si una interrupción deja el contenedor levantado, detén únicamente el proyecto Compose `amaruzen-demo-<PID>` que corresponda a esa ejecución con `docker compose --file scripts/demo/docker-compose.yml --project-name amaruzen-demo-<PID> down --volumes --remove-orphans`. Las capturas son de pantallas reales de la aplicación con datos sintéticos y deben revisarse antes de publicarse.

@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: amaruzen_demo
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo-only-local
+    ports:
+      - "127.0.0.1:55439:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d amaruzen_demo"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
